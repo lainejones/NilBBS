@@ -1,0 +1,261 @@
+; -------------------------------------------------------------------------
+; NilBBS - Installer script
+; Needs the standard Installer (43.3+, part of AmigaOS 3.x), AmigaOS 3.1 or
+; newer, a 68020 or better and a TCP/IP stack (Roadshow, Miami, AmiTCP).
+; Double-click Install_NilBBS, or from a Shell in this drawer:
+;     Installer Install_NilBBS
+;
+; A new install asks for the BBS name, the sysop account and the telnet port.
+; Run it again over an existing BBS drawer to update the programs:
+; configuration, users, messages, files and game saves are kept.
+; Door games are separate packages, each with its own installer.
+; -------------------------------------------------------------------------
+(set @app-name "NilBBS")
+(complete 0)
+
+; ---- the machine ---------------------------------------------------------
+(if (< (/ (getversion "exec.library" (resident)) 65536) 40)
+    (abort "NilBBS needs AmigaOS 3.1 or newer."))
+(set cpu (database "cpu"))
+(if (or (= cpu "68000") (= cpu "68010"))
+    (abort "NilBBS needs a 68020 or better processor (this Amiga has a " cpu ")."))
+(if (not (exists "BBS/NilBBS"))
+    (abort "Can't find the BBS drawer next to this script.\n\n"
+           "Run the installer from the drawer it came in (the one holding BBS)."))
+
+(message "Welcome to NilBBS.\n\n"
+         "This installs a multi-node telnet BBS with message areas, file areas "
+         "and doors (with sample doors that show how doors are added).\n\n"
+         "You will be asked where to put it, the name of your BBS and your sysop "
+         "account. Door games come as their own packages with their own installers.\n\n"
+         "NilBBS needs a TCP/IP stack (Roadshow, Miami or AmiTCP) to take calls.")
+
+; the questions must be shown: at the Novice level the Installer answers them
+; itself with their defaults (the icon sets MINUSER=AVERAGE; this covers a Shell start)
+(if (= @user-level 0)
+    (abort "Please run the installer at the Intermediate or Expert level - "
+           "it needs to ask you for your BBS name and sysop account."))
+
+; ---- where ---------------------------------------------------------------
+(set instdest
+    (askdir
+        (prompt "Where should NilBBS go?\n\nA drawer called BBS is made inside the one you choose.")
+        (help "Pick a hard drive or drawer with a few megabytes free. Message bases, "
+              "uploads and game saves grow over time, so a roomy partition is best.\n\n"
+              "If that place already has a BBS drawer from an earlier NilBBS, the "
+              "installer updates the programs in it and keeps your setup.")
+        (default "Work:")))
+(set bbsdir (tackon instdest "BBS"))
+(set @default-dest bbsdir)
+(set is_update 0)
+(if (or (exists (tackon bbsdir "NilBBS")) (exists (tackon bbsdir "NuzBBS")))
+    (set is_update
+        (askbool
+            (prompt "There is already a NilBBS in\n" bbsdir "\n\n"
+                    "Update its programs? Your configuration, users, messages, files "
+                    "and game saves are kept.")
+            (help "Choose Update to replace only the programs. Choose Cancel to stop "
+                  "(pick another place next time for a second, separate BBS).")
+            (choices "Update" "Cancel")
+            (default 1))))
+(if (and (or (exists (tackon bbsdir "NilBBS")) (exists (tackon bbsdir "NuzBBS"))) (= is_update 0))
+    (exit "Nothing was changed." (quiet)))
+(complete 10)
+
+; ---- questions (a new install only) -----------------------------------------
+(set bbsname "My NilBBS")
+(set sysop "Sysop")
+(set pw1 "")
+(set port 23)
+(set nodes 4)
+(if (= is_update 0)
+  (
+    (set bbsname
+        (askstring
+            (prompt "What is your BBS called?\n\n(It is shown to callers on the menus and the welcome screen.)")
+            (help "Any name up to 40 characters, for example \"The Dragon's Lair\". "
+                  "You can change it later in BBSConfig.")
+            (default "My NilBBS")))
+    (while (or (< (strlen bbsname) 1) (> (strlen bbsname) 40) (patmatch "#?\"#?" bbsname))
+        (set bbsname
+            (askstring (prompt "The BBS name must be 1 to 40 characters and can't contain \".\n\nWhat is your BBS called?")
+                       (help "For example: The Dragon's Lair") (default "My NilBBS"))))
+
+    (set sysop
+        (askstring
+            (prompt "Your sysop account\n\nWhat handle do you want to log in with?")
+            (help "This account gets full sysop rights (the sysop menu, the user editor, "
+                  "file and message tools). Use the handle you want callers to see - "
+                  "not \"Sysop\" or \"Admin\" (bots try those; NilBBS bans anyone who "
+                  "tries admin, root or administrator).")
+            (default "")))
+    (while (or (< (strlen sysop) 2) (> (strlen sysop) 31)
+               (patmatch "#?[\"|:/]#?" sysop)
+               (patmatch "([Aa][Dd][Mm][Ii][Nn]|[Rr][Oo][Oo][Tt]|[Aa][Dd][Mm][Ii][Nn][Ii][Ss][Tt][Rr][Aa][Tt][Oo][Rr])" sysop))
+        (set sysop
+            (askstring (prompt "The handle must be 2 to 31 characters, can't contain \" | : or /, "
+                               "and can't be admin, root or administrator.\n\nYour sysop handle:")
+                       (help "For example: Gandalf") (default ""))))
+
+    (set pw2 "x")
+    (while (<> pw1 pw2)
+      (
+        (set pw1 (askstring (prompt "Password for " sysop "\n\n(at least 4 characters; you type it again next)")
+                            (help "You log in with this password. Pick something bots can't guess.")
+                            (default "")))
+        (while (or (< (strlen pw1) 4) (patmatch "#?\"#?" pw1))
+            (set pw1 (askstring (prompt "The password must be at least 4 characters and can't contain \".\n\nPassword for " sysop ":")
+                                (help "You log in with this password.") (default ""))))
+        (set pw2 (askstring (prompt "Type the password for " sysop " again:")
+                            (help "The two must match.") (default "")))
+        (if (<> pw1 pw2) (message "The two passwords were different - please try again."))
+      ))
+
+    (set port
+        (asknumber
+            (prompt "Telnet port\n\nCallers connect to this port. 23 is the telnet standard.")
+            (help "Use 23 unless something else on this Amiga already uses it. If your "
+                  "router forwards a different outside port (2323 is common), you can still "
+                  "run NilBBS on 23 inside.")
+            (range 1 65535)
+            (default 23)))
+    (set nodes
+        (asknumber
+            (prompt "How many callers at once (nodes)?")
+            (help "Each caller uses one node. 4 is plenty for most systems; each node "
+                  "needs a little memory while someone is on it.")
+            (range 1 32)
+            (default 4)))
+  ))
+(complete 20)
+
+; ---- copy the BBS ---------------------------------------------------------------
+(if (= is_update 0)
+    (copyfiles
+        (prompt "Copying NilBBS to " bbsdir)
+        (help @copyfiles-help)
+        (source "BBS")
+        (dest bbsdir)
+        (all))
+  (
+    ; an update: the programs and icons only
+    (copyfiles (source "BBS") (dest bbsdir)
+               (choices "NilBBS" "BBSNode" "BBSCtl" "BBSControl" "BBSSchedule" "BBSConfig" "BBSToss" "BBSMaint" "NilTerm" "NilTerm.info"
+                        "BBSControl.info" "BBSSchedule.info" "BBSConfig.info"
+                        "Start NilBBS" "Start NilBBS.info" "Stop NilBBS" "Stop NilBBS.info"))
+    ; a BBS installed before the rename (NuzBBS, 2026): its config, its boot lines, the old programs
+    (if (exists (tackon bbsdir "NuzBBS"))
+      (
+        (if (and (exists (tackon bbsdir "Config/NuzBBS.cfg")) (not (exists (tackon bbsdir "Config/NilBBS.cfg"))))
+            (rename (tackon bbsdir "Config/NuzBBS.cfg") (tackon bbsdir "Config/NilBBS.cfg")))
+        (if (= 0 (run "Search >NIL: S:User-Startup \"BBS:NuzBBS\"" (safe)))
+            (startup "NuzBBS"
+                (prompt "NuzBBS is now called NilBBS - updating its lines in S:User-Startup")
+                (help @startup-help)
+                (command "Assign BBS: \"" bbsdir "\"\n"
+                         "Run >NIL: BBS:NilBBS QUIET\n")))
+        (delete (tackon bbsdir "NuzBBS") (safe))
+        (delete (tackon bbsdir "Start NuzBBS") (safe))
+        (delete (tackon bbsdir "Start NuzBBS.info") (safe))
+        (delete (tackon bbsdir "Stop NuzBBS") (safe))
+        (delete (tackon bbsdir "Stop NuzBBS.info") (safe))
+      ))
+    (copyfiles (source "BBS/Doors") (dest (tackon bbsdir "Doors")) (all))
+    ; config files added since the first release: only when the BBS doesn't have them yet
+    (if (not (exists (tackon bbsdir "Config/BannedNames.cfg")))
+        (copyfiles (source "BBS/Config") (dest (tackon bbsdir "Config")) (choices "BannedNames.cfg")))
+    (if (not (exists (tackon bbsdir "Config/StripAds.cfg")))
+        (copyfiles (source "BBS/Config") (dest (tackon bbsdir "Config")) (choices "StripAds.cfg")))
+    ; the language template always matches the programs (translations are the sysop's own files)
+    (if (not (exists (tackon bbsdir "Text/Language")))
+        (makedir (tackon bbsdir "Text/Language")))
+    (copyfiles (source "BBS/Text/Language") (dest (tackon bbsdir "Text/Language")) (choices "English.lng"))
+  ))
+(if (not (exists (tackon instdest "BBS.info")))
+    (copyfiles (source "BBS.info") (dest instdest)))
+(procedure P_EXEC (run (cat "Protect \"" (tackon bbsdir prog) "\" +e") (safe)))
+(set prog "NilBBS") (P_EXEC)
+(set prog "BBSNode") (P_EXEC)
+(set prog "BBSCtl") (P_EXEC)
+(set prog "BBSControl") (P_EXEC)
+(set prog "BBSSchedule") (P_EXEC)
+(set prog "BBSConfig") (P_EXEC)
+(set prog "BBSToss") (P_EXEC)
+(set prog "BBSMaint") (P_EXEC)
+(set prog "NilTerm") (P_EXEC)
+(run (cat "Protect \"" (tackon bbsdir "Doors/Guess/Guess") "\" +e") (safe))
+(run (cat "Protect \"" (tackon bbsdir "Doors/CNTest/CNTest") "\" +e") (safe))
+(run (cat "Protect \"" (tackon bbsdir "Doors/XIMTest/XIMTest") "\" +e") (safe))
+(makedir (tackon bbsdir "Fido") (safe))
+(makedir (tackon bbsdir "Fido/Inbound") (safe))
+(makedir (tackon bbsdir "Fido/Outbound") (safe))
+(makedir (tackon bbsdir "Files/Import") (safe))
+(makedir (tackon bbsdir "PFiles") (safe))
+(complete 55)
+
+; ---- settings + the sysop account (a new install) ---------------------------------
+(set ctl (cat "\"" (tackon bbsdir "BBSCtl") "\""))
+(set dirarg (cat " DIR=\"" bbsdir "\""))
+(if (= is_update 0)
+  (
+    (run (cat ctl " SET bbs_name \"" bbsname "\"" dirarg) (safe))
+    (run (cat ctl " SET sysop_name \"" sysop "\"" dirarg) (safe))
+    (run (cat ctl " SET port " port dirarg) (safe))
+    (run (cat ctl " SET nodes " nodes dirarg) (safe))
+    (if (<> 0 (run (cat ctl " ADDSYSOP \"" sysop "\" \"" pw1 "\"" dirarg) (safe)))
+        (message "The sysop account could not be created.\n\n"
+                 "After NilBBS starts, call it and sign up as NEW - the first account on a "
+                 "fresh BBS becomes the sysop."))
+    (set pw1 "") (set pw2 "")
+  ))
+(complete 65)
+
+; ---- start at boot ----------------------------------------------------------------------
+(if (= is_update 0)
+  (
+    (if (askbool
+            (prompt "Start NilBBS automatically when the Amiga boots?\n\n"
+                    "(Adds two lines to S:User-Startup. Your TCP/IP stack must start before it.)")
+            (help "The lines assign BBS: to " bbsdir " and run NilBBS in the background. "
+                  "Without them, start it from the \"Start NilBBS\" icon in the BBS drawer.")
+            (default 1))
+        (startup "NilBBS"
+            (prompt "Adding NilBBS to S:User-Startup")
+            (help @startup-help)
+            (command "Assign BBS: \"" bbsdir "\"\n"
+                     "Run >NIL: BBS:NilBBS QUIET\n")))
+  ))
+(complete 90)
+
+; ---- BBSControl every time Workbench starts (new installs and updates, once) ------------------
+; a project icon in SYS:WBStartup whose default tool is BBSControl by its full path (BBS: may not
+; be assigned at boot), tooltype DONOTWAIT so Workbench doesn't wait for it to close
+(set wbs "SYS:WBStartup")
+(if (not (exists (tackon wbs "BBSControl.info")))
+    (if (askbool
+            (prompt "Open BBSControl every time Workbench starts?\n\n"
+                    "With BBSControl open, a caller who pages you pops up on the Amiga's "
+                    "screen - answer with a chat window, or say not now.")
+            (help "This puts a BBSControl icon in " wbs " that starts " (tackon bbsdir "BBSControl") ". "
+                  "To stop it, drag that icon out of the WBStartup drawer.")
+            (default 1))
+      (
+        (copyfiles (prompt "Adding BBSControl to " wbs) (help @copyfiles-help)
+                   (source "WBStartup") (dest wbs) (all))
+        (tooltype (dest (tackon wbs "BBSControl")) (setdefaulttool (tackon bbsdir "BBSControl")))
+      )))
+(complete 95)
+
+; ---- done ---------------------------------------------------------------------------------
+(if (= is_update 0)
+    (message "NilBBS is installed in\n" bbsdir "\n\n"
+             "Your sysop handle is " sysop ", telnet port " port ".\n\n"
+             "To start it now: start your TCP/IP stack, then double-click \"Start NilBBS\" "
+             "in the BBS drawer. Telnet in and log in as " sysop ".\n\n"
+             "BBSConfig changes every setting; BBSControl is the live sysop console;\n"
+             "BBSSchedule sets up maintenance and other scheduled tasks.\n"
+             "Tip: put your own network on an \"allow\" line in Config/IPFilter.cfg.")
+    (message "NilBBS in " bbsdir " is updated.\n\n"
+             "Restart it (Stop NilBBS, then Start NilBBS) to use the new programs."))
+(complete 100)
+(exit (quiet))

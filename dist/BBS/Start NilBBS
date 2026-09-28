@@ -1,0 +1,7 @@
+; Start NilBBS in the background - your TCP/IP stack must be running.
+; Double-click the icon (IconX runs this script).
+Assign >NIL: BBS: EXISTS
+If WARN
+  Assign BBS: ""
+EndIf
+Run >NIL: BBS:NilBBS QUIET

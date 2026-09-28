@@ -1,0 +1,7 @@
+; Stop NilBBS - callers are told and logged off first.
+; Double-click the icon (IconX runs this script).
+Assign >NIL: BBS: EXISTS
+If WARN
+  Assign BBS: ""
+EndIf
+BBS:BBSCtl SHUTDOWN

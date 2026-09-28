@@ -1,0 +1,9 @@
+; Run the nightly maintenance now (it normally runs at 04:00 - Events.cfg).
+; Double-click the icon (IconX runs this script).
+Assign >NIL: BBS: EXISTS
+If WARN
+  Assign BBS: ""
+EndIf
+BBS:BBSMaint
+Echo ""
+Echo "Close this window when you have read it."

@@ -1,0 +1,70 @@
+NilBBS - a multi-node telnet BBS for the Amiga
+===============================================
+
+Needs: AmigaOS 3.1 or newer, a 68020 or better, a TCP/IP stack (Roadshow,
+Miami or AmiTCP) and the standard Installer (AmigaOS 3.x has it).
+
+INSTALLING
+  Double-click Install_NilBBS.  It asks:
+    - where to put the BBS drawer
+    - the name of your BBS
+    - your sysop handle and password (this account gets full sysop rights)
+    - the telnet port (23) and how many callers at once (nodes)
+    - whether to start NilBBS when the Amiga boots
+
+  Then start your TCP/IP stack, double-click "Start NilBBS" in the BBS drawer
+  and telnet in.  Log in with the sysop handle you chose.
+
+UPDATING
+  Run Install_NilBBS again and point it at the same place.  It replaces the
+  programs only - your configuration, users, messages, files and game saves
+  stay as they are.
+
+WHAT'S IN THIS DRAWER
+  Install_NilBBS    the installer
+  BBS/              the BBS: programs and a default configuration
+
+DOORS
+  BBS/Doors holds four sample doors - one of each kind NilBBS runs - already on
+  the doors menu (or ready to switch on) in BBS:Config/Doors.cfg:
+    Guess     an AmigaDOS CLI program (type = cli) - its source is a template
+    Hello     a CNet-style ARexx script (type = cnetrexx)
+    CNTest    a CNet C PFile (type = cnetc)
+    XIMTest   an AmiExpress XIM door (type = xim; needs AEDoor.library)
+  Copy a section, change the name and command, and your door is on the menu -
+  or use BBSConfig's Doors page.  CNet PFiles and AmiExpress doors run as they are.
+  Door games come as their own packages, each with an installer that puts the game
+  in BBS:PFiles and adds its Doors.cfg section (and works for CNet too).
+
+IN THE BBS DRAWER AFTER INSTALLING
+  Start NilBBS / Stop NilBBS   start and stop the BBS
+  BBSConfig                    every setting, users, menus, doors, areas
+  BBSControl                   the live sysop console: who's on, bans, one-liners
+                               - and where callers' pages pop up, with a chat window
+  BBSSchedule                  scheduled tasks: nightly maintenance, door maintenance,
+                               mail, backups - add, edit, remove, run now
+  NilTerm                      an ANSI telnet client (BBSControl's Logon button logs
+                               on to a node with it): IBM PC screen, dialing
+                               directory, scrollback, capture, ZMODEM/YMODEM/XMODEM.
+                               Help shows its keys.  It also comes as a package of
+                               its own (NilTerm.lha).  Font: IBM VGA 8x16
+                               by VileR (int10h.org), CC BY-SA 4.0
+  BBSCtl                       the same from a Shell (BBSCtl WHO, BBSCtl BANS ...)
+  Run Maintenance              the nightly clean-up, by hand
+  Local Logon                  log in on this Amiga without telnet
+
+SAFETY
+  Anyone who tries the handles admin, root or administrator is banned for
+  good, and repeated bad passwords or connection floods ban an address for a
+  while.  Put your own network on an "allow" line in BBS:Config/IPFilter.cfg.
+  The Remote Shell door is switched off; see BBS:Config/Doors.cfg if you want it.
+
+INSTALLING BY HAND
+  Copy the BBS drawer where you want it, then from a Shell:
+      CD <where you put it>/BBS
+      Execute Setup
+  Telnet in and sign up as NEW - the first account on a fresh BBS becomes
+  the sysop.
+  To have BBSControl open every time Workbench starts, copy WBStartup/BBSControl
+  and its icon into SYS:WBStartup and set the icon's Default Tool to your
+  BBS/BBSControl (Workbench's Icon > Information).

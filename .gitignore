@@ -1,0 +1,6 @@
+out/
+*.o
+__pycache__/
+test/*.log
+test/.seed_accounts
+tools/personal.txt

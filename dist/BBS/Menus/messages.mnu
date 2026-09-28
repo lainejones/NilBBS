@@ -1,0 +1,15 @@
+; NilBBS message menu                                   BBS:Menus/messages.mnu
+title  = Message Base
+header = messages
+accent = 1
+frame  = 3
+prompt = |08[|15|TL|08 min] |11Messages |08(|07|MA|08) > |07
+
+item = A | 0  | msgarea  |  | Change area
+item = R | 0  | msgread  |  | Read messages
+item = N | 0  | msgnew   |  | New message scan (all areas)
+item = P | 10 | msgpost  |  | Post a message
+item = E | 10 | email    |  | Private mail
+item = W | 10 | qwkdown  |  | Download a QWK mail packet
+item = U | 10 | qwkup    |  | Upload QWK replies (.REP)
+item = Q | 0  | return   |  | Back to the main menu

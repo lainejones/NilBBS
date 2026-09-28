@@ -1,0 +1,7 @@
+; A local logon in a window on this Amiga (NilBBS must be running).
+; Double-click the icon (IconX runs this script).
+Assign >NIL: BBS: EXISTS
+If WARN
+  Assign BBS: ""
+EndIf
+BBS:BBSNode LOCAL

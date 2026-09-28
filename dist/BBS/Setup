@@ -1,0 +1,41 @@
+; NilBBS setup - run this from inside the NilBBS drawer:
+;     CD <where you put it>/BBS
+;     Execute Setup
+; It assigns BBS: to this drawer, makes the programs executable (a .zip
+; can't carry AmigaDOS protection bits) and can add NilBBS to S:User-Startup.
+
+FailAt 21
+Assign BBS: ""
+Protect BBS:NilBBS +e
+Protect BBS:BBSNode +e
+Protect BBS:BBSCtl +e
+Protect BBS:BBSControl +e
+Protect BBS:BBSToss +e
+Protect BBS:BBSConfig +e
+Protect BBS:BBSMaint +e
+Protect BBS:Doors/Guess/Guess +e
+Protect BBS:Doors/LORD/LCBDoor +e
+MakeDir >NIL: BBS:Fido BBS:Fido/Inbound BBS:Fido/Outbound BBS:Files/Amiga
+
+Echo "NilBBS is in *"`CD`*"."
+Ask "Start NilBBS automatically at boot (adds 3 lines to S:User-Startup)? (y/N)"
+If WARN
+  Search >NIL: S:User-Startup "NilBBS begin"
+  If WARN
+    Echo ";NilBBS begin" >>S:User-Startup
+    Echo "Assign BBS: *"`CD`*"" >>S:User-Startup
+    Echo "Run >NIL: BBS:NilBBS QUIET" >>S:User-Startup
+    Echo ";NilBBS end" >>S:User-Startup
+    Echo "Added to S:User-Startup."
+  Else
+    Echo "S:User-Startup already starts NilBBS - left alone."
+  EndIf
+EndIf
+Echo ""
+Echo "Next steps:"
+Echo "  1. Edit BBS:Config/NilBBS.cfg (BBS name, sysop, port) and"
+Echo "     BBS:Config/IPFilter.cfg (put your own LAN on an allow line)."
+Echo "  2. Start your TCP/IP stack, then:  Run >NIL: BBS:NilBBS"
+Echo "  3. Telnet in and sign up - the FIRST account becomes the sysop."
+Echo "  4. BBS:BBSConfig edits every setting; BBS:BBSControl is the live sysop"
+Echo "     console; BBS:BBSCtl the Shell one."

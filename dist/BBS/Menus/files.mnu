@@ -1,0 +1,16 @@
+; NilBBS file menu                                         BBS:Menus/files.mnu
+title  = File Areas
+header = files
+accent = 1
+frame  = 3
+prompt = |08[|15|TL|08 min] |11Files |08(|07|FA|08) > |07
+
+item = A | 0  | filearea   |  | Change area
+item = L | 0  | filelist   |  | List files
+item = N | 0  | filenew    |  | New files (all areas)
+item = S | 0  | filesearch |  | Search
+item = D | 10 | download   |  | Download
+item = U | 10 | upload     |  | Upload
+item = R | 0  | filestats  |  | Your transfers and ratio
+item = O | 10 | filesubop  |  | File tools (sysop, sub-ops)
+item = Q | 0  | return     |  | Back to the main menu
