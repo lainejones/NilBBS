@@ -1896,7 +1896,7 @@ static void run_net(struct Door *d)
         fd_set r;
         struct timeval tv;
         ULONG sigs = SIGBREAKF_CTRL_C;
-        LONG n, maxfd = (s > N.sock ? s : N.sock) + 1;
+        LONG n, maxfd = (s > N.sock ? s : N.sock) + 1;     /* N.sock = -1: a local or serial caller */
 
         /* caller -> door server */
         if (in_avail()) {
@@ -1912,13 +1912,14 @@ static void run_net(struct Door *d)
 
         FD_ZERO(&r);
         FD_SET(s, &r);
-        FD_SET(N.sock, &r);
-        tv.tv_secs = 1; tv.tv_micro = 0;
+        if (N.sock >= 0) FD_SET(N.sock, &r);
+        tv.tv_secs = N.sock >= 0 ? 1 : 0;
+        tv.tv_micro = N.sock >= 0 ? 0 : 100000;    /* no socket to wake us: look at the caller 10x a second */
         if (WaitSelect(maxfd, &r, NULL, NULL, &tv, &sigs) < 0 && !(sigs & SIGBREAKF_CTRL_C)) continue;
         node_heartbeat();
         if (sigs & SIGBREAKF_CTRL_C) { node_hangup("disconnected by sysop"); break; }
 
-        if (FD_ISSET(N.sock, &r)) {
+        if (N.sock < 0 || FD_ISSET(N.sock, &r)) {
             tn_wait(0, 0, NULL);                /* pull the caller's bytes in */
             if (!N.online) break;
         }

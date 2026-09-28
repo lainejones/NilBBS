@@ -3,7 +3,10 @@
  *
  *   BBSNode NODE=<n> SOCKET=<id>
  *
- * where <id> is the ReleaseSocket() key for the accepted connection.
+ * where <id> is the ReleaseSocket() key for the accepted connection.  Also
+ *   BBSNode LOCAL            a logon in a console window on this Amiga
+ *   BBSNode SERIAL [NODE=n]  wait for a call on the serial line (serial.c), take one
+ *                            caller, hang up, exit; NilBBS keeps one of these waiting
  */
 #include <exec/types.h>
 #include <exec/tasks.h>
@@ -27,6 +30,7 @@ struct Library *SocketBase = NULL;
 struct NodeCtx N;
 
 static char taskname[24];
+static char g_how[40];                  /* a serial call: "CONNECT 19200" or "direct" */
 
 extern LONG msg_unread_mail(void);
 extern int users_waiting(void);          /* sysop.c */
@@ -138,7 +142,7 @@ void set_menu_activity(const char *title, BOOL with_area)
 static int real_main(void)
 {
     struct RDArgs *rda;
-    LONG args[3] = { 0, 0, 0 };
+    LONG args[4] = { 0, 0, 0, 0 };
     struct Task *me = FindTask(NULL);
     APTR oldwin;
     char *oldname;
@@ -147,10 +151,11 @@ static int real_main(void)
     memset(&N, 0, sizeof(N));
     N.sock = -1;
 
-    rda = ReadArgs((STRPTR)"NODE/N,SOCKET/N,LOCAL/S", args, NULL);
+    rda = ReadArgs((STRPTR)"NODE/N,SOCKET/N,LOCAL/S,SERIAL/S", args, NULL);
     if (!rda) { PrintFault(IoErr(), (STRPTR)"BBSNode"); return RETURN_FAIL; }
     N.local = args[2] != 0;
-    if (!N.local && (!args[0] || !args[1])) {
+    N.serial = args[3] != 0;
+    if (!N.local && !N.serial && (!args[0] || !args[1])) {
         PutStr((STRPTR)"BBSNode is started by NilBBS.  For a local logon: BBSNode LOCAL\n");
         goto out;
     }
@@ -158,7 +163,23 @@ static int real_main(void)
         if (N.local) PutStr((STRPTR)"BBSNode: NilBBS isn't running.\n");
         goto out;
     }
-    if (N.local) {
+    if (N.serial) {
+        /* one waiting process per line: it keeps this name for the whole call, which is
+         * how NilBBS knows the line is covered (and starts the next one when it's gone) */
+        Forbid();
+        if (FindTask((STRPTR)SERIAL_TASKNAME)) { Permit(); goto out; }
+        me->tc_Node.ln_Name = (char *)SERIAL_TASKNAME;
+        Permit();
+        N.cfg = cfg_load(bbs_config());
+        if (!ser_open()) goto out_serial;
+        if (!ser_wait_call(g_how, sizeof(g_how))) goto out_serial;
+        if (!args[0] && cfg_int(N.cfg, "serial_node", 0) > 0) {
+            static LONG sn;
+            sn = cfg_int(N.cfg, "serial_node", 0);
+            args[0] = (LONG)&sn;
+        }
+    }
+    if (N.local || N.serial) {
         /* claim a free node for ourselves (the daemon hands out the rest) */
         int n, want = args[0] ? (int)*(LONG *)args[0] : 0;
         shared_lock(N.S);
@@ -167,12 +188,21 @@ static int real_main(void)
                 memset(&N.S->node[n - 1], 0, sizeof(struct NodeInfo));
                 N.S->node[n - 1].state = NS_LOGIN;
                 N.S->node[n - 1].task = me;
-                N.S->node[n - 1].local = 1;
+                N.S->node[n - 1].local = N.local ? 1 : 0;
                 N.S->node[n - 1].connected = bbs_now();
                 N.node = n;
             }
         shared_unlock(N.S);
-        if (!N.node) { PutStr((STRPTR)"BBSNode: no free node.\n"); goto out; }
+        if (!N.node) {
+            if (N.serial) {
+                static const char busy[] = "\r\nAll nodes are busy - please call back later.\r\n";
+                ser_write((const UBYTE *)busy, sizeof(busy) - 1);
+                bbs_log(BBS_SYSLOG, "serial: a call (%s), but no free node", g_how);
+                goto out_serial;
+            }
+            PutStr((STRPTR)"BBSNode: no free node.\n");
+            goto out;
+        }
     } else N.node = (int)*(LONG *)args[0];
     if (N.node < 1 || N.node > N.S->nodes) goto out;
     N.ni = &N.S->node[N.node - 1];
@@ -182,7 +212,7 @@ static int real_main(void)
     ((struct Process *)me)->pr_WindowPtr = (APTR)-1L;
     oldname = me->tc_Node.ln_Name;
     sprintf(taskname, "NilBBS Node %d", N.node);
-    me->tc_Node.ln_Name = taskname;
+    if (!N.serial) me->tc_Node.ln_Name = taskname;
 
     if (N.local) {
         char spec[80];
@@ -191,13 +221,16 @@ static int real_main(void)
         sprintf(spec, "CON:0/12/640/244/NilBBS - local logon, node %d/CLOSE", N.node);
         if (!(N.lcon = Open((STRPTR)spec, MODE_NEWFILE))) goto out_free;
         SetMode(N.lcon, 1);                     /* raw: key by key, no echo */
+    } else if (N.serial) {
+        SocketBase = OpenLibrary((STRPTR)"bsdsocket.library", 4);     /* network doors, if a stack runs */
+        bbs_log(BBS_SYSLOG, "node %ld: serial call (%s)", (LONG)N.node, g_how);
     } else {
         if (!(SocketBase = OpenLibrary((STRPTR)"bsdsocket.library", 4))) goto out_free;
         N.sock = ObtainSocket(*(LONG *)args[1], AF_INET, SOCK_STREAM, 0);
         if (N.sock < 0) goto out_free;
     }
 
-    N.cfg = cfg_load(bbs_config());
+    if (!N.cfg) N.cfg = cfg_load(bbs_config());
     lang_board();                               /* the login screens: the board's language */
     diz_env.cfg = N.cfg;                        /* FILE_ID.DIZ handling (dizcore.c) */
     sprintf(diz_env.work, "BBS:Nodes/Node%d", N.node);
@@ -218,6 +251,7 @@ static int real_main(void)
     str_copy(N.ni->activity, "Logging in", LONGNAME);
     shared_unlock(N.S);
     if (N.local) strcpy(N.ipstr, "local");
+    else if (N.serial) strcpy(N.ipstr, "serial");
     else {
         LONG one = 1;
         ip_tostr(N.ip, N.ipstr);
@@ -282,6 +316,11 @@ out_free:
     }
     me->tc_Node.ln_Name = oldname;
     ((struct Process *)me)->pr_WindowPtr = oldwin;
+out_serial:
+    if (N.serial) {
+        ser_close();                            /* hang up; DTR drops as the device closes */
+        if (N.cfg && !N.node) { cfg_free(N.cfg); N.cfg = NULL; }
+    }
 out:
     FreeArgs(rda);
     return rc;

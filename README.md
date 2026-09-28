@@ -10,6 +10,12 @@ a314bsd, WinUAE's bsdsocket emulation).
   (up to 32 nodes). The accepted socket is handed over with
   `ReleaseSocket`/`ObtainSocket`. Telnet negotiation covers ECHO, SGA,
   BINARY, NAWS (window size) and TTYPE (terminal names).
+- **Serial line / dial-up (optional).** Callers can also come in on a serial port: a
+  Hayes modem (init string, answers `RING`, takes the speed from `CONNECT`, hangs up
+  with `+++ ATH0` and DTR), a null-modem cable, or a WiFi modem in transparent mode.
+  A call ends when the BBS ends it, the CD line drops, or the modem says `NO CARRIER`.
+  NilBBS keeps one `BBSNode SERIAL` waiting on the line, and a call takes a free node
+  like any other. Set it up with the `serial_*` / `modem_*` keys in `NilBBS.cfg`.
 - **Terminal autodetection.** The BBS sends an ANSI cursor-position request
   and sizes the screen with a second one. A one-glyph UTF-8 probe tells an
   8-bit terminal from a UTF-8 one.

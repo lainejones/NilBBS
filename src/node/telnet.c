@@ -155,6 +155,7 @@ BOOL tn_flush(void)
     if (!N.online) { N.outlen = 0; return FALSE; }
     spy_feed(p, left);                          /* the sysop watching, if anyone is */
     if (N.local) { local_write(p, left); N.outlen = 0; return N.online; }
+    if (N.serial) { ser_write(p, left); N.outlen = 0; return N.online; }
     while (left > 0) {
         LONG n;
         if (!wait_writable(30)) { node_hangup("send stalled"); break; }
@@ -179,7 +180,7 @@ void tn_raw(const UBYTE *buf, LONG len)
     while (len-- > 0) {
         UBYTE c = *buf++;
         out_byte(c);
-        if (c == IAC && !N.local) out_byte(IAC);
+        if (c == IAC && !N.local && !N.serial) out_byte(IAC);
     }
 }
 
@@ -191,7 +192,7 @@ void tn_rawflush(const UBYTE *buf, LONG len)
 
 static void send_cmd(UBYTE verb, UBYTE opt)
 {
-    if (!N.online || N.local) return;
+    if (!N.online || N.local || N.serial) return;
     if (N.outlen >= OUTBUF_SIZE - 4) tn_flush();
     N.out[N.outlen++] = IAC;
     N.out[N.outlen++] = verb;
@@ -200,7 +201,7 @@ static void send_cmd(UBYTE verb, UBYTE opt)
 
 static void send_sb(UBYTE opt, const UBYTE *data, LONG len)
 {
-    if (N.local) return;
+    if (N.local || N.serial) return;
     if (N.outlen >= OUTBUF_SIZE - len - 8) tn_flush();
     N.out[N.outlen++] = IAC;
     N.out[N.outlen++] = SB;
@@ -244,6 +245,20 @@ void in_unget(UBYTE c)
     if (prev == N.in_head) return;
     N.in_tail = prev;
     N.in[prev] = c;
+}
+
+/* a byte from a serial line: no telnet, but the same CR LF / CR NUL -> CR as data */
+static void serial_byte(UBYTE c)
+{
+    if (N.binary_raw) { in_put(c); return; }
+    if (N.cr_last) {
+        N.cr_last = 0;
+        if (c == 0 || c == '\n') return;
+    }
+    if (c == '\r') N.cr_last = 1;
+    else if (c == '\n') c = '\r';
+    else if (c == 0) return;
+    in_put(c);
 }
 
 /* ---- negotiation ------------------------------------------------------------ */
@@ -398,6 +413,7 @@ LONG tn_wait(ULONG ms, ULONG extrasigs, ULONG *gotsigs)
      * about NEW bytes, or the wait would spin */
     if (in_avail() && !N.wait_new) return in_avail();
     if (N.local) return local_wait(ms, extrasigs, gotsigs);
+    if (N.serial) return ser_wait(ms, extrasigs, gotsigs, serial_byte);
 
     for (;;) {
         fd_set r;
@@ -456,6 +472,7 @@ void tn_start(void)
     N.cols = 80;
     N.rows = 24;
     if (N.local) { local_start(); return; }
+    if (N.serial) return;                  /* no telnet on a serial line: tdetect() asks the terminal */
 
     us[O_ECHO] = us[O_SGA] = us[O_BINARY] = 1;
     send_cmd(WILL, O_ECHO);

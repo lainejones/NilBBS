@@ -154,17 +154,20 @@ def write(name, g, **kw):
         os.makedirs(os.path.join(ROOT, 'test', 'icons'), exist_ok=True)
         iconlib.write_png(os.path.join(ROOT, 'test', 'icons', os.path.basename(name) + '.png'), g, PALETTE)
 
-write('BBS/BBSConfig.info',  config_icon())
-write('BBS/BBSControl.info', control_icon())
-write('BBS/BBSSchedule.info', schedule_icon())
-write('BBS/NilTerm.info', term_icon())
-write('BBS/Start NilBBS.info', start_icon(), icon_type=4, default_tool='C:IconX',
-      tool_types=['WINDOW=NIL:'])
-write('BBS/Stop NilBBS.info', stop_icon(), icon_type=4, default_tool='C:IconX',
-      tool_types=['DELAY=2'])
-write('BBS/Local Logon.info', logon_icon(), icon_type=4, default_tool='C:IconX',
-      tool_types=['WINDOW=NIL:'])
-write('BBS/Run Maintenance.info', maint_icon(), icon_type=4, default_tool='C:IconX',
-      tool_types=['WINDOW=CON:0/20/640/220/NilBBS Maintenance/CLOSE/WAIT'])
-subprocess.run([sys.executable, os.path.join(TOOLS, 'makeicon_drawer.py'),
-                os.path.join(ROOT, 'dist', 'BBS.info')], check=True)
+if __name__ == '__main__':          # (mkglow.py imports the drawings below for its classic images)
+    write('BBS/BBSConfig.info',  config_icon())
+    write('BBS/BBSControl.info', control_icon())
+    write('BBS/BBSSchedule.info', schedule_icon())
+    write('BBS/NilTerm.info', term_icon())
+    write('BBS/Start NilBBS.info', start_icon(), icon_type=4, default_tool='C:IconX',
+          tool_types=['WINDOW=NIL:'])
+    write('BBS/Stop NilBBS.info', stop_icon(), icon_type=4, default_tool='C:IconX',
+          tool_types=['DELAY=2'])
+    write('BBS/Local Logon.info', logon_icon(), icon_type=4, default_tool='C:IconX',
+          tool_types=['WINDOW=NIL:'])
+    write('BBS/Run Maintenance.info', maint_icon(), icon_type=4, default_tool='C:IconX',
+          tool_types=['WINDOW=CON:0/20/640/220/NilBBS Maintenance/CLOSE/WAIT'])
+    subprocess.run([sys.executable, os.path.join(TOOLS, 'makeicon_drawer.py'),
+                    os.path.join(ROOT, 'dist', 'BBS.info')], check=True)
+    # then the GlowIcons versions of the program icons (mkglow.py), keeping these as their classic images
+    subprocess.run([sys.executable, os.path.join(HERE, 'mkglow.py')] + (['--png'] if '--png' in sys.argv else []), check=True)

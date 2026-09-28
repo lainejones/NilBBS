@@ -16,7 +16,8 @@ COMMON  = src/common/util.c src/common/cfg.c src/common/sha256.c src/common/shar
 NODE    = src/node/node.c src/node/spy.c src/node/telnet.c src/node/charset.c src/node/term.c \
           src/node/login.c src/node/menu.c src/node/door.c src/node/misc.c \
           src/node/sysop.c src/node/msgui.c src/node/fileui.c src/node/zmodem.c src/node/cnetc.c src/node/diz.c \
-          src/node/acs.c src/node/community.c src/node/tele.c src/node/xymodem.c src/node/fse.c src/node/qwk.c
+          src/node/acs.c src/node/community.c src/node/tele.c src/node/xymodem.c src/node/fse.c src/node/qwk.c \
+          src/node/serial.c
 HDRS    = VERSION src/common/bbs.h src/common/cfg.h src/common/msgbase.h src/common/dizcore.h src/common/lang.h src/node/node.h src/node/zmodem.h
 
 all: out/NilBBS out/BBSNode out/BBSCtl out/BBSControl out/BBSSchedule out/BBSConfig out/BBSToss out/BBSMaint out/Guess out/XIMTest out/CNTest out/LCBDoor out/NilTerm

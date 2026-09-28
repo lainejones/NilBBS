@@ -104,6 +104,7 @@ def main():
     term['Makefile'] = NILTERM_MAKEFILE.encode()
     term['README.md'] = nilterm_readme(tree)
     term['.gitignore'] = b'out/\n'
+    term['.gitattributes'] = tree['.gitattributes']     # *.ans binary: never touch ANSI line ends
 
     # check before touching anything
     stage = os.path.join(ROOT, 'out', 'public-check')

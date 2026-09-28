@@ -700,6 +700,32 @@ static void rexx_handle(void)
     }
 }
 
+/* the serial line (NilBBS.cfg serial_device): one "BBSNode SERIAL" waits for a call, takes
+ * it and exits; a new one is started once it has gone (not more often than every 10 s, so a
+ * port that won't open doesn't spin).  It is found by its task name, SERIAL_TASKNAME. */
+static ULONG g_serial_last;
+static void serial_keep(ULONG now)
+{
+    char cmd[PATHLEN + 16];
+    BPTR in, out;
+    BOOL there;
+    if (!cfg_str(C, "serial_device", "")[0] || S->shutdown || now - g_serial_last < 10) return;
+    Forbid();
+    there = FindTask((STRPTR)SERIAL_TASKNAME) != NULL;
+    Permit();
+    if (there) return;
+    g_serial_last = now;
+    sprintf(cmd, "%s SERIAL", g_nodecmd);
+    in  = Open((STRPTR)"NIL:", MODE_OLDFILE);
+    out = Open((STRPTR)"NIL:", MODE_NEWFILE);
+    if (SystemTags((STRPTR)cmd, SYS_Input, in, SYS_Output, out, SYS_Asynch, TRUE,
+                   NP_StackSize, 16384, TAG_END) == -1) {
+        if (in) Close(in);
+        if (out) Close(out);
+        say("could not start %s SERIAL", g_nodecmd);
+    }
+}
+
 /* once a second */
 static ULONG last_save;
 static ULONG g_reset_seen[MAX_NODES];   /* when a node's RESET was first seen, 0 = none */
@@ -734,6 +760,9 @@ static void housekeeping(void)
             say("node %ld process vanished - freed", (LONG)(n + 1));
         }
     }
+    shared_unlock(S);
+    serial_keep(now);
+    shared_lock(S);
     if (S->bans_dirty && now - last_save >= 5) {
         ipf_save_bans(S, BBS_BANS);
         last_save = now;
@@ -836,6 +865,9 @@ static int real_main(void)
         Delay(i < 30 ? 100 : 500);
     }
     say("NilBBS " BBS_VERSION " listening on port %ld", port);
+    if (cfg_str(C, "serial_device", "")[0])
+        say("serial line: %s unit %ld, %ld baud, %s", cfg_str(C, "serial_device", ""), cfg_int(C, "serial_unit", 0),
+            cfg_int(C, "serial_baud", 19200), cfg_str(C, "modem_init", "")[0] ? "modem" : "direct");
     load_events();
     rexx_open();
     g_self = FindTask(NULL);
@@ -902,6 +934,12 @@ out:
             if (S->node[n].state >= NS_LOGIN && task_alive(S->node[n].task))
                 Signal(S->node[n].task, SIGBREAKF_CTRL_C);
         shared_unlock(S);
+        {   /* the serial line's waiting BBSNode (on a call it got the CTRL-C above too) */
+            struct Task *t;
+            Forbid();
+            if ((t = FindTask((STRPTR)SERIAL_TASKNAME))) Signal(t, SIGBREAKF_CTRL_C);
+            Permit();
+        }
         for (waited = 0; waited < 30 && active_nodes(); waited++) {
             housekeeping();
             Delay(50);
