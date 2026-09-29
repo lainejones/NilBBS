@@ -634,7 +634,7 @@ void file_search(void)
  *   ratio_free_kb = 1024    ; what a new caller may download before uploading
  *   ratio_exempt  = L100    ; ACS of callers the ratio doesn't apply to
  * The sysop can also grant credits (extra KB) per user.  -1 = unlimited. */
-static LONG ratio_allowed_kb(void)
+LONG ratio_allowed_kb(void)
 {
     LONG ratio = cfg_int(N.cfg, "ratio", 0), left;
     const char *ex = cfg_str(N.cfg, "ratio_exempt", "");

@@ -149,7 +149,16 @@ a314bsd, WinUAE's bsdsocket emulation).
   user list, node-to-node messages, sysop broadcasts, per-level daily time
   limits, an idle timeout, data-driven menus (`Menus/*.mnu`), and ANSI screens
   with pipe colour codes (`|00`-`|23`) and MCI codes (`|UN`, `|TL`, `|BN`,
-  ...).
+  ...; the full list is under [Screens and MCI codes](#screens-and-mci-codes)).
+- **The Wall.** The one-liners shown at logon: the newest 12 lines, framed and
+  centred as "Name says: text". A caller can write theirs normally, anonymously
+  ("Someone" - the sysop still sees who) or in a colour of their choice; the
+  sysop's `*` clears the wall. Drawn from `Text/wall.ans`.
+- **Your account status** (main menu `A`): level, calls, posts, time left,
+  ratio, uploads and downloads and more, drawn from `Text/userstatus.ans`.
+- **The look is yours.** The menus, the wall and the status screen are ANSI
+  files in `BBS:Text` that you can redraw in any ANSI editor - see
+  [Screens and MCI codes](#screens-and-mci-codes).
 - **FILE_ID.DIZ.**
   - An archive's own FILE_ID.DIZ is what file listings show. It is
     extracted once with LhA or UnZip and cached in `<area>/.diz`;
@@ -267,6 +276,54 @@ signup. A translation may also bring menus (`BBS:Menus/Deutsch/main.mnu`) and
 screens (`BBS:Text/Deutsch/`); whatever it doesn't bring - your custom ANSI
 screens, door names, area names - is shown to everyone as it is.
 `python tools/langcheck.py Deutsch.lng` checks a translation on a PC.
+
+## Screens and MCI codes
+
+`BBS:Text` holds the board's screens: `welcome`, `connect`, `logoff`,
+`mainmenu`, `messagesmenu`, `filesmenu`, `wall`, `userstatus`, `sysinfo` and the
+bulletins (`main`, `messages` and `files` are the menus' banners). Each can come
+as `.ans` for ANSI callers and `.asc` for plain-text ones; draw them in any
+ANSI editor (PabloDraw, Moebius, ...). Screens may use pipe colour codes
+(`|00`-`|15` foreground, `|16`-`|23` background) and MCI codes, which are
+replaced with the caller's own values:
+
+| Code | Value | Code | Value | Code | Value |
+|------|-------|------|-------|------|-------|
+| `\|UN` | user name | `\|UL` | location | `\|UR` | real name |
+| `\|LV` | security level | `\|UI` | user number | `\|UC` | total calls |
+| `\|CT` | calls today | `\|PO` | messages posted | `\|DV` | door visits |
+| `\|TL` | minutes left (`--` = no limit) | `\|TM` | time left ("25 mins") | `\|XP` | expert mode on/off |
+| `\|FC` | first call | `\|LC` | last call | `\|CF` | conference |
+| `\|MA` | message area | `\|FA` | file area | `\|PR` | transfer protocol |
+| `\|RT` | ratio ("2:1") | `\|DL` | downloads left | `\|CD` | credits |
+| `\|UK` | KB uploaded | `\|UP` | files uploaded | `\|DK` | KB downloaded |
+| `\|DN` | files downloaded | `\|BN` | board name | `\|SN` | sysop name |
+| `\|ND` | node | `\|IP` | caller's address | `\|TT` | terminal type |
+| `\|CS` | character set | `\|CO` / `\|RO` | columns / rows | `\|VR` | NilBBS version |
+| `\|DA` / `\|TI` | date / time | `\|CL` | clear the screen | `\|PA` | pause for a key |
+
+**Widths.** In ANSI art a value must not push the frame out of line, so a code
+can carry a width, as Mystic has it: `|UN$R20` is the user name left-aligned in
+20 columns, `$L20` right-aligns it, `$C20` centres it; a longer value is cut.
+`Text/userstatus.ans` is an example - every value in it has one.
+
+**The wall** (`Text/wall.ans`) shows its 12 lines with `|WA` ... `|WL` (the
+oldest first), each usually with a width, e.g. `|WA$C74`. A caller who wrote
+their line in a colour of their own gets that colour; set the art's colour
+again after the code.
+
+**Menus.** A menu (`Menus/<name>.mnu`) with `screen = <name>menu` is drawn from
+`Text/<name>menu.ans` - redraw it however you like. Its hot keys still come from
+the `.mnu`'s items, so keep the two in step when you add or move an item. Items
+a regular caller can't use (the sysop menu `!`) aren't on the picture but still
+work for those who may. Take the `screen =` line out and NilBBS draws the menu
+from its items again, in a box under the `header =` banner.
+
+**Starting over.** `tools/mkscreens.py` (on a PC, Python 3) writes these screens
+- the menus from each `.mnu` and its banner - into a `BBS:` drawer:
+`python tools/mkscreens.py --root <your BBS drawer> --force`. Without `--force`
+it keeps screens you already have. Delete a screen and NilBBS draws its own
+built-in version.
 
 ## Writing a door
 

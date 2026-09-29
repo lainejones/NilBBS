@@ -5,16 +5,19 @@
 ; Commands: menu <name>  gosub <name>  return  logoff  hangup  text <screen>
 ;   door <TAG>  doors  msgarea msgread msgnew msgpost email feedback
 ;   filearea filelist filenew download upload filesearch
-;   oneliners lastcallers who users page sysinfo settings terminal time sysop
+;   oneliners lastcallers who users page sysinfo status settings terminal time sysop
 ;   join [conf]  bulletins  vote  finger  filestats  filesubop  tele [channel]  chat  pagesysop
 ; The level field may also be an access condition (ACS), e.g. "L20 FB" or "Gstaff".
-; screen = a file in BBS:Text (.ans/.asc/.txt) drawn instead of the item list;
-; header = one drawn above it (the items stay generated, so edits and level-gated items show).
+; screen = a file in BBS:Text (.ans/.asc/.txt) drawn instead of the item list - redraw it in
+;   any ANSI editor, and keep its keys in step with the items; take the line out and the menu
+;   is generated again: the items in a box under the
+; header = banner (generated, so item edits and level-gated items show by themselves).
 ; accent = colour of the hot keys + title tab (0-7: 1 blue 2 green 3 cyan 4 red 5 magenta
 ;   6 brown 7 grey), frame = the box round the items (0-15); default red keys, dark grey box.
 ; Prompts and screens understand |00-|15 colours, |16-|23 backgrounds and
 ; codes like |UN (user) |TL (time left) |BN (BBS name) |MA (message area).
 
+screen = mainmenu
 title  = Main Menu
 header = main
 accent = 1
@@ -28,7 +31,7 @@ item = E | 0   | email       |          | Private mail
 item = J | 0   | join        |          | Join a conference
 item = B | 0   | bulletins   |          | Bulletins
 item = V | 0   | vote        |          | Voting booth
-item = O | 0   | oneliners   |          | One-liners
+item = O | 0   | oneliners   |          | The wall (one-liners)
 item = W | 0   | who         |          | Who's online
 item = C | 0   | lastcallers |          | Last callers
 item = U | 0   | users       |          | User list
@@ -38,6 +41,7 @@ item = T | 0   | tele        |          | Teleconference (chat)
 item = R | 0   | chat        |          | Request a private chat
 item = P | 0   | pagesysop   |          | Page the sysop
 item = I | 0   | sysinfo     |          | System information
+item = A | 0   | status      |          | Your account status
 item = K | 0   | settings    |          | Your settings
 item = Y | 0   | feedback    |          | Write to the sysop
 item = ! | 255 | sysop       |          | Sysop menu

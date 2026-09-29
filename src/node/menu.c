@@ -64,11 +64,12 @@ static const char *builtin_main[] = {
     "item = D | 0   | download  |          | Download",
     "item = U | 0   | upload    |          | Upload",
     "item = X | 0   | doors     |          | Doors / games",
-    "item = O | 0   | oneliners |          | One-liners",
+    "item = O | 0   | oneliners |          | The wall (one-liners)",
     "item = W | 0   | who       |          | Who's online",
     "item = C | 0   | lastcallers |        | Last callers",
     "item = S | 0   | page      |          | Send a node message",
     "item = I | 0   | sysinfo   |          | System information",
+    "item = A | 0   | status    |          | Your account status",
     "item = K | 0   | settings  |          | Your settings",
     "item = ! | 255 | sysop     |          | Sysop menu",
     "item = G | 0   | logoff    |          | Goodbye (log off)",
@@ -170,7 +171,7 @@ static BOOL menu_blocks(void)
 }
 
 /* visible width of a string with |xx colour codes */
-static int vis_len(const char *s)
+int vis_len(const char *s)
 {
     int n = 0;
     while (*s) {
@@ -180,7 +181,7 @@ static int vis_len(const char *s)
     return n;
 }
 
-static void put_rep(const char *glyph, int n)
+void put_rep(const char *glyph, int n)
 {
     char buf[100];
     int i = 0;
@@ -304,6 +305,7 @@ static int run_cmd(struct MenuItem *it, char *newmenu, int *gosub)
     if (!str_icmp(c, "pagesysop"))  { page_sysop(); return 0; }
     if (!str_icmp(c, "chat"))       { caller_chat(); return 0; }
     if (!str_icmp(c, "oneliners"))  { oneliners(); return 0; }
+    if (!str_icmp(c, "status"))     { user_status(); return 0; }
     if (!str_icmp(c, "lastcallers")) { lastcallers_show(); return 0; }
     if (!str_icmp(c, "who"))       { whos_online(); return 0; }
     if (!str_icmp(c, "users"))     { userlist(); return 0; }

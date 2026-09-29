@@ -1,4 +1,5 @@
 ; NilBBS file menu                                         BBS:Menus/files.mnu
+screen = filesmenu
 title  = File Areas
 header = files
 accent = 1

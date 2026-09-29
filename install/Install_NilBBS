@@ -170,6 +170,12 @@
     (if (not (exists (tackon bbsdir "Text/Language")))
         (makedir (tackon bbsdir "Text/Language")))
     (copyfiles (source "BBS/Text/Language") (dest (tackon bbsdir "Text/Language")) (choices "English.lng"))
+    ; screens added since 1.2 (the wall, Your account status): only when the BBS doesn't have them.
+    ; The menus stay the board's own - their .ans screens (Text/*menu.ans) are there to copy by hand
+    (if (not (exists (tackon bbsdir "Text/wall.ans")))
+        (copyfiles (source "BBS/Text") (dest (tackon bbsdir "Text")) (choices "wall.ans" "wall.asc")))
+    (if (not (exists (tackon bbsdir "Text/userstatus.ans")))
+        (copyfiles (source "BBS/Text") (dest (tackon bbsdir "Text")) (choices "userstatus.ans" "userstatus.asc")))
   ))
 (if (not (exists (tackon instdest "BBS.info")))
     (copyfiles (source "BBS.info") (dest instdest)))
@@ -256,6 +262,9 @@
              "BBSSchedule sets up maintenance and other scheduled tasks.\n"
              "Tip: put your own network on an \"allow\" line in Config/IPFilter.cfg.")
     (message "NilBBS in " bbsdir " is updated.\n\n"
-             "Restart it (Stop NilBBS, then Start NilBBS) to use the new programs."))
+             "Restart it (Stop NilBBS, then Start NilBBS) to use the new programs.\n\n"
+             "New in 1.3: \"Your account status\". Your menus are kept as they are, so add it to\n"
+             "Menus/main.mnu yourself:   item = A | 0 | status | | Your account status\n"
+             "The menus can also be ANSI screens you draw yourself - see the ReadMe."))
 (complete 100)
 (exit (quiet))

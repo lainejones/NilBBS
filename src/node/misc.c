@@ -13,52 +13,279 @@
 #include "node.h"
 #include "zmodem.h"
 
-/* ---- one-liners: Data/OneLiners.dat, newest last, "name|date|text" ------------ */
+/* ---- the wall (one-liners): Data/OneLiners.dat, newest last, "name|date|text[|flags]" ---------
+ * flags: 'a' = anonymous (shown as "Someone"; the sysop's list still has the name),
+ *        'c' + a pen number 9..15 = the line's own colour.  Older 3-field lines still read. */
 
-#define MAX_ONELINERS 15
+#define WALL_SHOW 12                    /* lines on the wall */
+#define WALL_W    76                    /* inside the frame: " |" + 76 + "|" = 79 columns */
+#define WALL_TEXT 50                    /* longest line a caller can write */
+static const UBYTE wall_cycle[] = { 11, 13, 15 };
 
-void oneliners(void)
+/* the top edge with the title in a tab: " ┌──┤ title ├──┐" */
+static void box_top(const char *title, int w, int pen)
+{
+    int t = vis_len(title) + 4, l = (w - t) / 2, r = w - t - l;
+    tprintf(" |%02d\xDA", pen); put_rep("\xC4", l);
+    tprintf("\xB4 |15%s |%02d\xC3", title, pen);
+    put_rep("\xC4", r);
+    tputs("\xBF|07\n");
+}
+
+static void box_bottom(int w, int pen)
+{
+    tprintf(" |%02d\xC0", pen); put_rep("\xC4", w); tputs("\xD9|07\n");
+}
+
+static void box_rule(int w, int pen)
+{
+    tprintf(" |%02d\xC3", pen); put_rep("\xC4", w); tputs("\xB4|07\n");
+}
+
+/* one line of the wall, centred, in its colour (the text as it is: a '|' is no code) */
+static void wall_row(const char *vis, int pen)
+{
+    int n = strlen(vis), l;
+    if (n > WALL_W - 2) n = WALL_W - 2;
+    l = (WALL_W - n) / 2;
+    tputs(" |09\xB3");
+    put_rep(" ", l);
+    tprintf("|%02d", pen);
+    tputraw((const UBYTE *)vis, n, CS_CP437);
+    put_rep(" ", WALL_W - l - n);
+    tputs("|09\xB3|07\n");
+}
+
+static void wall_add(void)
+{
+    char text[WALL_TEXT + 8], date[16], flags[8] = "", line[200];
+    char *p;
+    LONG k;
+    tputs(L("misc.wall.style", "|08[|15N|08]|07ormal  |08[|15A|08]|07nonymous  |08[|15C|08]|07olour  |08[|15Q|08]|07uit: "));
+    k = tgethot("NACQ\r");
+    if (k == KEY_HANGUP) return;
+    tprintf("%c\n", (int)(k == '\r' ? 'N' : k));
+    if (k == 'Q') return;
+    if (k == 'A') strcpy(flags, "a");
+    if (k == 'C') {
+        int c;
+        tputs("  ");
+        for (c = 9; c <= 15; c++) tprintf("|%02d%d|08) |%02d\xDB\xDB  ", c, c - 8, c);
+        tputs(L("misc.wall.colour", "\n|07Colour |08(1-7)|07: "));
+        k = tgethot("1234567Q\r");
+        if (k == KEY_HANGUP) return;
+        if (k >= '1' && k <= '7') { tprintf("%c\n", (int)k); sprintf(flags, "c%d", (int)(k - '1' + 9)); }
+        else tputs("\n");
+    }
+    tputs("|07> |15");
+    if (tgetline(text, WALL_TEXT, 0) <= 0) return;
+    for (p = text; *p; p++) if (*p == '|') *p = '!';
+    bbs_datestr(bbs_now(), date);
+    sprintf(line, "%s|%s|%s%s%s\n", N.user.name, date, text, flags[0] ? "|" : "", flags);
+    ObtainSemaphore(&N.S->msglock);
+    {
+        BPTR fh = Open((STRPTR)BBS_ONELINERS, MODE_READWRITE);
+        if (fh) { Seek(fh, 0, OFFSET_END); FPuts(fh, (STRPTR)line); Close(fh); }
+    }
+    ReleaseSemaphore(&N.S->msglock);
+    tputs(L("misc.oneliners.added", "|10Added.|07\n"));
+}
+
+/* the wall's lines, loaded by oneliners(); |WA..|WL in Text/wall.ans are these (term.c) */
+static char wall_lines[WALL_SHOW][OL_LINE];
+static int wall_n;
+
+static void wall_load(void)
 {
     struct LineReader lr;
-    char lines[MAX_ONELINERS + 1][120], line[160];
-    int n = 0, i;
-
+    char line[OL_LINE + 40];
+    wall_n = 0;
     ObtainSemaphore(&N.S->msglock);
     if (lr_open(&lr, BBS_ONELINERS)) {
         while (lr_gets(&lr, line, sizeof(line)) >= 0) {
             if (!line[0]) continue;
-            if (n == MAX_ONELINERS) { memmove(lines[0], lines[1], sizeof(lines[0]) * (MAX_ONELINERS - 1)); n--; }
-            str_copy(lines[n++], line, sizeof(lines[0]));
+            if (wall_n == WALL_SHOW) { memmove(wall_lines[0], wall_lines[1], sizeof(wall_lines[0]) * (WALL_SHOW - 1)); wall_n--; }
+            str_copy(wall_lines[wall_n++], line, sizeof(wall_lines[0]));
         }
         lr_close(&lr);
     }
     ReleaseSemaphore(&N.S->msglock);
+}
 
-    tputs(L("misc.oneliners.one_liners", "\n|09-=[ |15One-Liners|09 ]=-|07\n\n"));
-    if (!n) tputs(L("misc.oneliners.nobody_has_written", "  |08Nobody has written anything yet.|07\n"));
-    for (i = 0; i < n; i++) {
-        char *f[3];
-        if (str_split(lines[i], '|', f, 3) < 3) continue;
-        tprintf("  |11%-16.16s |08%s |07%s\n", f[0], f[1], f[2]);
+/* wall line i (0 = the oldest shown) as "Name says: text"; *pen = the writer's own colour, or -1.
+ * An empty wall's first line is the "nobody yet" note; lines past the end are empty. */
+void wall_mci(int i, char *out, int max, int *pen)
+{
+    char tmp[OL_LINE], *f[4];
+    const char *name;
+    LONG nf;
+    *out = 0; *pen = -1;
+    if (i < 0 || i >= WALL_SHOW) return;
+    if (!wall_n) {
+        if (!i) { str_copy(out, L("misc.wall.empty", "Nobody has written on the wall yet - be the first."), max); *pen = 8; }
+        return;
     }
-    tputs("\n");
-    if (!tyesno(L("misc.oneliners.add_one_liner", "|07Add a one-liner?"), FALSE)) return;
-    tputs("|07> |15");
-    {
-        char text[70], date[16];
-        char *p;
-        if (tgetline(text, 64, 0) <= 0) return;
-        for (p = text; *p; p++) if (*p == '|') *p = '!';
-        bbs_datestr(bbs_now(), date);
-        sprintf(line, "%s|%s|%s\n", N.user.name, date, text);
-        ObtainSemaphore(&N.S->msglock);
-        {
-            BPTR fh = Open((STRPTR)BBS_ONELINERS, MODE_READWRITE);
-            if (fh) { Seek(fh, 0, OFFSET_END); FPuts(fh, (STRPTR)line); Close(fh); }
+    if (i >= wall_n) return;
+    str_copy(tmp, wall_lines[i], sizeof(tmp));
+    if ((nf = str_split(tmp, '|', f, 4)) < 3) return;
+    name = f[0];
+    if (nf == 4) {
+        char *q;
+        for (q = f[3]; *q; q++) {
+            if (*q == 'a') name = L("misc.wall.someone", "Someone");
+            else if (*q == 'c' && q[1]) { int c = atoi(q + 1); if (c >= 9 && c <= 15) *pen = c; }
         }
-        ReleaseSemaphore(&N.S->msglock);
-        tputs(L("misc.oneliners.added", "|10Added.|07\n"));
     }
+    snprintf(out, max, L("misc.wall.says", "%s says: %s"), name, f[2]);
+}
+
+void oneliners(void)
+{
+    char vis[WALL_W + 40];
+    int i;
+
+    wall_load();
+    tcls();
+    /* the board's own wall (Text/wall.ans, lines as |WA..|WL); this built-in one is the fallback */
+    if (!tshowfile("wall")) {
+        box_top(L("misc.wall.title", "The Wall"), WALL_W, 9);
+        wall_row("", 9);
+        for (i = 0; i < (wall_n ? wall_n : 1); i++) {
+            int pen;
+            wall_mci(i, vis, sizeof(vis), &pen);
+            wall_row(vis, pen >= 0 ? pen : wall_cycle[i % sizeof(wall_cycle)]);
+        }
+        wall_row("", 9);
+        box_bottom(WALL_W, 9);
+    }
+
+    for (;;) {
+        LONG k;
+        tputs(N.sysop ? L("misc.wall.add_sysop", "\n|07Add a line to the wall? |08(|15y|08/|15N|08/|15?|08, |15*|08 clears it)|07 ")
+                      : L("misc.wall.add", "\n|07Add a line to the wall? |08(|15y|08/|15N|08/|15?|08)|07 "));
+        k = tgethot(N.sysop ? "YN?*\r" : "YN?\r");
+        if (k == KEY_HANGUP) return;
+        tprintf("%c\n", (int)(k == '\r' ? 'N' : k));
+        if (k == '?') {
+            tputs(L("misc.wall.help",
+                "\n|07Write one line (up to 50 characters) for every caller to see at logon.\n"
+                "  |15N|07ormal     shows your name\n"
+                "  |15A|07nonymous  shows \"Someone\" instead (the sysop can still see who)\n"
+                "  |15C|07olour     pick the colour of your line\n"
+                "The newest 12 lines are on the wall.\n"));
+            continue;
+        }
+        if (k == '*') {
+            if (tyesno(L("misc.wall.clear_confirm", "|12Clear the whole wall?"), FALSE)) {
+                LONG gone;
+                ObtainSemaphore(&N.S->msglock);
+                gone = oneliners_clear();
+                ReleaseSemaphore(&N.S->msglock);
+                tprintf(L("misc.wall.cleared", "|10Wall cleared (%ld lines).|07\n"), gone);
+            }
+            return;
+        }
+        if (k == 'Y') wall_add();
+        return;
+    }
+}
+
+/* ---- Your account status: Text/userstatus.ans if the board has one, else this, in two columns ---- */
+
+#define ST_W 76
+
+/* one row: two "label: value" fields, labels right-aligned to a colon */
+static void st_row(const char *l1, const char *v1, const char *l2, const char *v2)
+{
+    int a = vis_len(l1), b = vis_len(l2), n1 = strlen(v1), n2 = strlen(v2);
+    if (n1 > 18) n1 = 18;
+    if (n2 > 18) n2 = 18;
+    tputs(" |09\xB3");
+    put_rep(" ", 18 - a);
+    tprintf("|03%s|08: |15", l1);
+    tputraw((const UBYTE *)v1, n1, CS_CP437);
+    put_rep(" ", 18 - n1);
+    put_rep(" ", 18 - b);
+    tprintf("|03%s|08: |15", l2);
+    tputraw((const UBYTE *)v2, n2, CS_CP437);
+    put_rep(" ", ST_W - 18 - 2 - 18 - 18 - 2 - n2);
+    tputs("|09\xB3|07\n");
+}
+
+/* a row with one long field on each side, for names (label colour: the header's) */
+static void st_head(const char *l1, const char *v1, const char *l2, const char *v2)
+{
+    int a = vis_len(l1), b = vis_len(l2), n1 = strlen(v1), n2 = strlen(v2);
+    int w1 = ST_W / 2 - 4 - a, w2 = ST_W - ST_W / 2 - 2 - b;
+    if (n1 > w1) n1 = w1;
+    if (n2 > w2) n2 = w2;
+    tprintf(" |09\xB3 |12%s|08: |14", l1);
+    tputraw((const UBYTE *)v1, n1, CS_CP437);
+    put_rep(" ", w1 - n1 + 1);
+    tprintf("|12%s|08: |14", l2);
+    tputraw((const UBYTE *)v2, n2, CS_CP437);
+    put_rep(" ", w2 - n2);
+    tputs("|09\xB3|07\n");
+}
+
+static void kb_str(char *s, ULONG kb)
+{
+    if (kb >= 10240) sprintf(s, "%lu MB", (unsigned long)(kb / 1024));
+    else sprintf(s, "%lu KB", (unsigned long)kb);
+}
+
+void user_status(void)
+{
+    char v[8][24], first[16], last[16];
+    LONG left = time_left_mins(), allow;
+    LONG ratio = cfg_int(N.cfg, "ratio", 0);
+    const char *yes = L("misc.status.on", "on"), *no = L("misc.status.off", "off");
+
+    user_refresh();
+    tcls();
+    /* the board's own screen, with MCI codes for the values (Text/userstatus.ans); this
+     * built-in one is the fallback */
+    if (tshowfile("userstatus")) { tpause(); return; }
+    allow = ratio_allowed_kb();
+    bbs_datestr(N.user.firstcall, first);
+    bbs_datestr(N.user.lastcall, last);
+
+    box_top(L("misc.status.title", "User Status"), ST_W, 9);
+    st_head(L("misc.status.user", "User"), N.user.name,
+            L("misc.status.location", "Location"), N.user.location[0] ? N.user.location : "-");
+    box_rule(ST_W, 9);
+    sprintf(v[0], "%d", (int)N.user.level);
+    sprintf(v[1], "%lu", (unsigned long)N.user.calls);
+    sprintf(v[2], "%lu", (unsigned long)N.user.id);
+    sprintf(v[3], "%u", (unsigned)N.user.calls_today);
+    sprintf(v[4], "%lu", (unsigned long)N.user.posts);
+    if (left < 0) strcpy(v[5], L("misc.status.unlimited", "unlimited"));
+    else sprintf(v[5], L("misc.status.mins", "%ld mins"), left);
+    sprintf(v[6], "%lu", (unsigned long)N.user.doors);
+    st_row(L("misc.status.level", "Security level"), v[0], L("misc.status.calls", "Total calls"), v[1]);
+    st_row(L("misc.status.number", "User number"), v[2], L("misc.status.calls_today", "Calls today"), v[3]);
+    st_row(L("misc.status.posts", "Messages posted"), v[4], L("misc.status.time_left", "Time left"), v[5]);
+    st_row(L("misc.status.conf", "Conference"), conf_name(), L("misc.status.doors", "Door visits"), v[6]);
+    st_row(L("misc.status.expert", "Expert mode"), (N.user.flags & UF_EXPERT) ? yes : no,
+           L("misc.status.term", "Terminal"), term_name(N.term));
+    st_row(L("misc.status.first", "First call"), first, L("misc.status.last", "Last call"), last);
+    box_rule(ST_W, 9);
+    if (ratio > 0) sprintf(v[0], "%ld:1", ratio); else strcpy(v[0], L("misc.status.disabled", "none"));
+    if (allow < 0) strcpy(v[1], L("misc.status.unlimited", "unlimited")); else kb_str(v[1], (ULONG)allow);
+    kb_str(v[2], N.user.ulkb);
+    sprintf(v[3], "%lu", (unsigned long)N.user.uploads);
+    kb_str(v[4], N.user.dlkb);
+    sprintf(v[5], "%lu", (unsigned long)N.user.downloads);
+    sprintf(v[6], "%ld KB", (long)N.user.credits);
+    st_row(L("misc.status.ratio", "Ratio"), v[0], L("misc.status.dl_left", "Downloads left"), v[1]);
+    st_row(L("misc.status.ul_kb", "Uploaded"), v[2], L("misc.status.ul_files", "Files uploaded"), v[3]);
+    st_row(L("misc.status.dl_kb", "Downloaded"), v[4], L("misc.status.dl_files", "Files downloaded"), v[5]);
+    st_row(L("misc.status.credits", "Credits"), v[6], L("misc.status.protocol", "Protocol"), proto_name(N.user.proto));
+    box_rule(ST_W, 9);
+    st_head(L("misc.status.board", "Board"), cfg_str(N.cfg, "bbs_name", "NilBBS"),
+            L("misc.status.sysop", "Sysop"), cfg_str(N.cfg, "sysop_name", "Sysop"));
+    box_bottom(ST_W, 9);
+    tpause();
 }
 
 /* ---- last callers: Data/LastCallers.dat, fixed records (lists.c) ------------ */

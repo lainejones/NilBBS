@@ -1,4 +1,5 @@
 ; NilBBS message menu                                   BBS:Menus/messages.mnu
+screen = messagesmenu
 title  = Message Base
 header = messages
 accent = 1

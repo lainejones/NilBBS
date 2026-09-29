@@ -18,7 +18,33 @@ INSTALLING
 UPDATING
   Run Install_NilBBS again and point it at the same place.  It replaces the
   programs only - your configuration, users, messages, files and game saves
-  stay as they are.
+  stay as they are.  Screens that are new in a release are added only when you
+  don't have them yet; your menus are left as they are (see SCREENS for the
+  1.3 menu screens and the "Your account status" item).
+
+SCREENS - THE LOOK IS YOURS
+  The menus, the wall (one-liners at logon), "Your account status" and the
+  welcome/logoff screens are ANSI files in BBS:Text - redraw them in any ANSI
+  editor (PabloDraw, Moebius...).  Each has a .ans (ANSI callers) and a .asc
+  (plain text) version:
+    mainmenu, messagesmenu, filesmenu   the menus (Menus/<name>.mnu has
+                                        "screen = <name>menu")
+    wall                                the wall; its lines are |WA ... |WL
+    userstatus                          Your account status (main menu A)
+    welcome, connect, logoff            logon and goodbye
+  Values are MCI codes, like |UN (the user name) or |TL (time left).  A width
+  keeps them from pushing your art out of line: |UN$R20 is the name in 20
+  columns, left-aligned ($L right-aligns, $C centres).  The README on GitHub
+  lists every code.
+  A menu screen is only the picture: the keys still come from the items in
+  its .mnu, so keep the two in step.  Take the "screen =" line out and NilBBS
+  draws the menu from its items again.  Delete any screen and NilBBS draws its
+  own.
+  Updating from 1.2 or older: add the account status to your main menu with
+      item = A | 0 | status | | Your account status
+  in BBS:Menus/main.mnu.  For menu screens, copy the BBS/Text/*menu.* files of
+  this package into BBS:Text and add "screen = mainmenu" (messagesmenu,
+  filesmenu) to the matching .mnu - they show the standard items.
 
 WHAT'S IN THIS DRAWER
   Install_NilBBS    the installer

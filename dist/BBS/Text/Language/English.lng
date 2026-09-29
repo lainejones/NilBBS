@@ -89,6 +89,11 @@ login.do_logoff.thanks_for_calling = \n|11Thanks for calling |15%s|11!|07\n
 ; ----------------------------------------------------------------------------
 term.more = -- More (Y/n/=) --
 term.mci.guest = Guest
+term.mci.on = on
+term.mci.off = off
+term.mci.no_ratio = none
+term.mci.unlimited = unlimited
+term.mci.mins = %ld mins
 term.tcheck_messages.sysop_broadcast = |12*** |15Sysop broadcast|12 ***|07 %s\n
 term.tcheck_messages.node_wants_to = |14>> |15%s |07(node %d) |14wants to chat - use |15Chat|14 from the main menu.|07\n
 term.tcheck_messages.node = |11>> |15%s |07(node %d)|11:|07 %s\n
@@ -511,10 +516,48 @@ comm.finger.no_plan = |08No plan.|07\n
 ; ----------------------------------------------------------------------------
 ; One-liners, last callers, who's online, user list, node messages, settings (misc.c)
 ; ----------------------------------------------------------------------------
-misc.oneliners.one_liners = \n|09-=[ |15One-Liners|09 ]=-|07\n\n
-misc.oneliners.nobody_has_written = "  |08Nobody has written anything yet.|07\n"
-misc.oneliners.add_one_liner = |07Add a one-liner?
+misc.wall.style = "|08[|15N|08]|07ormal  |08[|15A|08]|07nonymous  |08[|15C|08]|07olour  |08[|15Q|08]|07uit: "
+misc.wall.colour = "\n|07Colour |08(1-7)|07: "
 misc.oneliners.added = |10Added.|07\n
+misc.wall.empty = Nobody has written on the wall yet - be the first.
+misc.wall.someone = Someone
+misc.wall.says = %s says: %s
+misc.wall.title = The Wall
+misc.wall.add_sysop = "\n|07Add a line to the wall? |08(|15y|08/|15N|08/|15?|08, |15*|08 clears it)|07 "
+misc.wall.add = "\n|07Add a line to the wall? |08(|15y|08/|15N|08/|15?|08)|07 "
+misc.wall.help = \n|07Write one line (up to 50 characters) for every caller to see at logon.\n  |15N|07ormal     shows your name\n  |15A|07nonymous  shows "Someone" instead (the sysop can still see who)\n  |15C|07olour     pick the colour of your line\nThe newest 12 lines are on the wall.\n
+misc.wall.clear_confirm = |12Clear the whole wall?
+misc.wall.cleared = |10Wall cleared (%ld lines).|07\n
+misc.status.on = on
+misc.status.off = off
+misc.status.title = User Status
+misc.status.user = User
+misc.status.location = Location
+misc.status.unlimited = unlimited
+misc.status.mins = %ld mins
+misc.status.level = Security level
+misc.status.calls = Total calls
+misc.status.number = User number
+misc.status.calls_today = Calls today
+misc.status.posts = Messages posted
+misc.status.time_left = Time left
+misc.status.conf = Conference
+misc.status.doors = Door visits
+misc.status.expert = Expert mode
+misc.status.term = Terminal
+misc.status.first = First call
+misc.status.last = Last call
+misc.status.disabled = none
+misc.status.ratio = Ratio
+misc.status.dl_left = Downloads left
+misc.status.ul_kb = Uploaded
+misc.status.ul_files = Files uploaded
+misc.status.dl_kb = Downloaded
+misc.status.dl_files = Files downloaded
+misc.status.credits = Credits
+misc.status.protocol = Protocol
+misc.status.board = Board
+misc.status.sysop = Sysop
 misc.lastcallers_show.last_callers = \n|09-=[ |15Last Callers|09 ]=-|07\n\n
 misc.lastcallers_show.node_handle_location = |08  Node  Handle                Location                  When\n
 misc.lastcallers_show.nobody_yet = "  |08(nobody yet)|07\n"

@@ -23,6 +23,7 @@
 #include <stdlib.h>
 
 #include "node.h"
+#include "zmodem.h"
 
 static const UBYTE pc2ansi[8] = { 0, 4, 2, 6, 1, 5, 3, 7 };
 
@@ -253,10 +254,20 @@ void tnl(void) { newline_out(); }
 
 /* ---- MCI codes -------------------------------------------------------------- */
 
+/* "955 KB", or "12 MB" from 10 MB up */
+static void kb_text(ULONG kb, char *out)
+{
+    if (kb >= 10240) sprintf(out, "%lu MB", (unsigned long)(kb / 1024));
+    else sprintf(out, "%lu KB", (unsigned long)kb);
+}
+
+static int mci_pen = -1;                /* a value's own colour (a wall line's), -1 = the screen's */
+
 void expand_mci(const char *code, char *out)
 {
     char c0 = code[0], c1 = code[1];
     *out = 0;
+    mci_pen = -1;
 #define IS(a,b) (c0 == (a) && c1 == (b))
     if (IS('U','N')) str_copy(out, N.loggedin ? N.user.name : L("term.mci.guest", "Guest"), NAMELEN);
     else if (IS('U','R')) strcpy(out, N.user.realname);
@@ -281,6 +292,31 @@ void expand_mci(const char *code, char *out)
     else if (IS('U','P')) sprintf(out, "%lu", N.user.uploads);
     else if (IS('D','N')) sprintf(out, "%lu", N.user.downloads);
     else if (IS('V','R')) strcpy(out, BBS_VERSION);
+    /* the account (Your account status, Text/userstatus.ans) */
+    else if (IS('U','I')) sprintf(out, "%lu", (unsigned long)N.user.id);
+    else if (IS('C','T')) sprintf(out, "%u", (unsigned)N.user.calls_today);
+    else if (IS('D','V')) sprintf(out, "%lu", (unsigned long)N.user.doors);
+    else if (IS('C','F')) str_copy(out, conf_name(), 64);
+    else if (IS('X','P')) strcpy(out, (N.user.flags & UF_EXPERT) ? L("term.mci.on", "on") : L("term.mci.off", "off"));
+    else if (IS('F','C')) bbs_datestr(N.user.firstcall, out);
+    else if (IS('L','C')) bbs_datestr(N.user.lastcall, out);
+    else if (IS('R','T')) {
+        LONG r = cfg_int(N.cfg, "ratio", 0);
+        if (r > 0) sprintf(out, "%ld:1", r); else strcpy(out, L("term.mci.no_ratio", "none"));
+    }
+    else if (IS('D','L')) {
+        LONG k = ratio_allowed_kb();
+        if (k < 0) strcpy(out, L("term.mci.unlimited", "unlimited")); else kb_text((ULONG)k, out);
+    }
+    else if (IS('U','K')) kb_text(N.user.ulkb, out);
+    else if (IS('D','K')) kb_text(N.user.dlkb, out);
+    else if (IS('C','D')) kb_text(N.user.credits > 0 ? (ULONG)N.user.credits : 0, out);
+    else if (IS('P','R')) str_copy(out, proto_name(N.user.proto <= PROTO_MAX ? N.user.proto : PROTO_Z), 32);
+    else if (c0 == 'W' && c1 >= 'A' && c1 <= 'L') wall_mci(c1 - 'A', out, 150, &mci_pen);  /* the wall */
+    else if (IS('T','M')) {
+        LONG t = time_left_mins();
+        if (t < 0) strcpy(out, L("term.mci.unlimited", "unlimited")); else sprintf(out, L("term.mci.mins", "%ld mins"), t);
+    }
     else if (IS('C','L')) strcpy(out, "\x0C");
     else if (IS('C','R')) strcpy(out, "\n");
     else if (IS('P','A')) strcpy(out, "\x01");     /* pause marker */
@@ -307,15 +343,33 @@ static void tput_codes(const UBYTE *s, LONG len, UBYTE srccs)
                 continue;
             }
             if (a >= 'A' && a <= 'Z' && b >= 'A' && b <= 'Z') {
-                char val[80];
+                char val[160];
                 char code[2];
                 code[0] = a; code[1] = b;
                 expand_mci(code, val);
                 if (val[0] != '|') {
+                    int used = 3;
                     if (s > run) tputraw(run, s - run, srccs);
+                    /* a width after the code, as Mystic has it: $Rnn = left-aligned in nn
+                     * columns, $Lnn = right-aligned, $Cnn = centred; longer values are cut */
+                    if (len >= 7 && s[3] == '$' && (s[4] == 'R' || s[4] == 'L' || s[4] == 'C') &&
+                        s[5] >= '0' && s[5] <= '9' && s[6] >= '0' && s[6] <= '9') {
+                        int w = (s[5] - '0') * 10 + (s[6] - '0'), n = strlen(val), pad, lp;
+                        char out[160];
+                        if (n > w) n = w;
+                        pad = w - n;
+                        lp = s[4] == 'L' ? pad : s[4] == 'C' ? pad / 2 : 0;
+                        memset(out, ' ', lp);
+                        memcpy(out + lp, val, n);
+                        memset(out + lp + n, ' ', pad - lp);
+                        out[w] = 0;
+                        strcpy(val, out);
+                        used = 7;
+                    }
+                    if (mci_pen >= 0) tcolor(mci_pen);
                     if (val[0] == 1 && !val[1]) tpause();
                     else tputraw((UBYTE *)val, strlen(val), CS_CP437);
-                    s += 3; len -= 3; run = s;
+                    s += used; len -= used; run = s;
                     continue;
                 }
             }
