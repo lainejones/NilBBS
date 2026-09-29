@@ -193,11 +193,13 @@ a314bsd, WinUAE's bsdsocket emulation).
     and keeps their comments, then tells a running NilBBS to reload.
   - `BBSControl`: a Workbench (GadTools) console with the live node list,
     kick, kick+ban, messaging, the ban list, reload and shutdown.
-  - `NilTerm`: an ANSI telnet client, and the sysop's terminal (BBSControl's
+  - `NilTerm`: an ANSI BBS terminal, and the sysop's terminal (BBSControl's
     **Logon** button): its own 640x400 16-colour screen (the VGA palette), the
-    IBM VGA 8x16 CP437 font, a SyncTERM-style dialing directory, status bar,
-    scrollback, capture, clipboard, ZMODEM (auto-start) / YMODEM / XMODEM, and
-    Settings (folders). It also ships on its own: `tools/mknilterm.py` builds the
+    IBM VGA 8x16 CP437 font, a SyncTERM-style dialing directory (telnet, rlogin,
+    raw TCP or a modem; auto-login; PC or Amiga screen - Topaz, Latin-1, 0x9B
+    CSI; modem-speed emulation; iCE colours), status bar, scrollback, capture,
+    clipboard, ZMODEM (auto-start) / YMODEM / XMODEM, and Settings (folders,
+    the modem). It also ships on its own: `tools/mknilterm.py` builds the
     NilTerm package (installer, AmigaGuide manual, LICENSE). The font is from
     "The Ultimate Oldschool PC Font Pack" by VileR (https://int10h.org/oldschool-pc-fonts/),
     CC BY-SA 4.0.
@@ -316,7 +318,11 @@ make            # out/NilBBS out/BBSNode out/BBSCtl out/BBSControl out/BBSToss o
 make dist       # out/BBS - the ready-to-copy install drawer
 python tools/mkrelease.py    # out/release/NilBBS (installer package)
 python tools/mknilterm.py    # out/release/NilTerm (NilTerm's own package)
+python tools/mklha.py NilBBS 1.2    # pack a package into an .lha with LhA on the bench
 ```
+
+Each package drawer ships with its own icon beside it (`NilBBS.info`, `NilTerm.info`) inside the
+`.lha`, so after unpacking it shows on Workbench and **Install_…** is a double-click away.
 
 The CNet door support builds against CNet's own SDK headers, which aren't
 published with the source: copy them from a CNet 3 or 4 installation's `sdk`

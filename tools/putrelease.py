@@ -27,4 +27,8 @@ for base, dirs, files in os.walk(SRC):
         r = nh('PUTFILE', os.path.join(base, f), d + '/' + f)
         if 'OK' not in r: print('FAILED', f, r)
         n += 1
+if os.path.isfile(SRC + '.info'):       # the package drawer's own icon, beside it
+    r = nh('PUTFILE', SRC + '.info', DEST + '.info')
+    if 'OK' not in r: print('FAILED', PKG + '.info', r)
+    n += 1
 print('put', n, 'files in', DEST)

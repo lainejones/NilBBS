@@ -57,6 +57,23 @@ def mkdirs(base, names):
         os.makedirs(p, exist_ok=True)
         open(os.path.join(p, '.keep'), 'w').close()      # an empty drawer survives .lha/.zip
 
+def package_icons(out):
+    """out = out/release/.../<Pkg>: give the package drawer its own icon (<Pkg>.info BESIDE it - the
+    .lha must carry it, or the unpacked drawer is invisible on Workbench and only a Shell reaches the
+    installer), and a document icon on each top-level ReadMe / LICENSE / .readme / .guide"""
+    if TOOLS not in sys.path:
+        sys.path.insert(0, TOOLS)
+    import iconlib, makeicon_doc as doc, makeicon_drawer as drw
+    open(out.rstrip('\\/') + '.info', 'wb').write(
+        iconlib.build_info(drw.build_cidx(), drw.PALETTE, drw.PLANAR_MAP, drw.W, drw.H, drw.TRANSPARENT, drawer=True))
+    docicon = iconlib.build_info(doc.build_cidx(), doc.PALETTE, doc.PLANAR_MAP, doc.W, doc.H, doc.TRANSPARENT,
+                                 icon_type=4, default_tool=doc.DEFAULT_TOOL)
+    for f in os.listdir(out):
+        p = os.path.join(out, f)
+        if (os.path.isfile(p) and not os.path.exists(p + '.info') and
+                (f in ('ReadMe', 'LICENSE') or f.endswith('.readme') or f.endswith('.guide'))):
+            open(p + '.info', 'wb').write(docicon)
+
 # ---------------------------------------------------------------- the check
 def wbstartup_icon(tool_info, dst_dir):
     """BBSControl's tool icon -> a WBStartup project icon (default tool BBS:BBSControl - the installer
@@ -121,6 +138,7 @@ def main():
                               tool_types=['APPNAME=NilBBS', 'SCRIPT=Install_NilBBS', 'DEFUSER=AVERAGE',
                                           'MINUSER=AVERAGE', 'LOG=FALSE'])
     open(icon, 'wb').write(data)
+    package_icons(OUT)
 
     bad = personal_check(OUT)
     if bad:

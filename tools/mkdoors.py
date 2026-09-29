@@ -24,7 +24,7 @@ OUTROOT = os.path.join(ROOT, 'out', 'release', 'Doors')
 TOOLS = os.path.join(PROJ, 'tools')
 
 sys.path.insert(0, HERE)
-from mkrelease import copy, copytree, mkdirs, personal_check      # shared helpers + the same check
+from mkrelease import copy, copytree, mkdirs, personal_check, package_icons     # shared helpers + the same check
 
 # ---------------------------------------------------------------- what goes in each game drawer
 def c_game(repo, prog, datadirs, extra_dirs=('Art',)):
@@ -301,6 +301,7 @@ def build(game):
                               tool_types=['APPNAME=' + d['title'], 'SCRIPT=Install_' + game, 'DEFUSER=AVERAGE',
                                           'MINUSER=AVERAGE', 'LOG=FALSE'])
     open(os.path.join(out, 'Install_%s.info' % game), 'wb').write(data)
+    package_icons(out)
     bad = personal_check(out)
     if bad:
         for f, w in bad:

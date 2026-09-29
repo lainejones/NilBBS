@@ -43,9 +43,10 @@ IN THE BBS DRAWER AFTER INSTALLING
                                - and where callers' pages pop up, with a chat window
   BBSSchedule                  scheduled tasks: nightly maintenance, door maintenance,
                                mail, backups - add, edit, remove, run now
-  NilTerm                      an ANSI telnet client (BBSControl's Logon button logs
+  NilTerm                      an ANSI BBS terminal (BBSControl's Logon button logs
                                on to a node with it): IBM PC screen, dialing
-                               directory, scrollback, capture, ZMODEM/YMODEM/XMODEM.
+                               directory with auto-login, telnet/rlogin/modem,
+                               scrollback, capture, ZMODEM/YMODEM/XMODEM.
                                Help shows its keys.  It also comes as a package of
                                its own (NilTerm.lha).  Font: IBM VGA 8x16
                                by VileR (int10h.org), CC BY-SA 4.0

@@ -20,7 +20,7 @@ Same personal-info check as the BBS release.
 import os, shutil, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from mkrelease import ROOT, TOOLS, copy, personal_check
+from mkrelease import ROOT, TOOLS, copy, personal_check, package_icons
 
 OUT = os.path.join(ROOT, 'out', 'release', 'NilTerm')
 SRC = os.path.join(ROOT, 'install', 'nilterm')
@@ -55,6 +55,7 @@ def main():
                            icon_type=4, default_tool='Installer',
                            tool_types=['APPNAME=NilTerm', 'SCRIPT=Install_NilTerm', 'DEFUSER=AVERAGE',
                                        'MINUSER=NOVICE', 'LOG=FALSE']))
+    package_icons(OUT)
 
     bad = personal_check(OUT)
     if bad:
