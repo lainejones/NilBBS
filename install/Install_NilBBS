@@ -263,8 +263,10 @@
              "Tip: put your own network on an \"allow\" line in Config/IPFilter.cfg.")
     (message "NilBBS in " bbsdir " is updated.\n\n"
              "Restart it (Stop NilBBS, then Start NilBBS) to use the new programs.\n\n"
-             "New in 1.3: \"Your account status\". Your menus are kept as they are, so add it to\n"
-             "Menus/main.mnu yourself:   item = A | 0 | status | | Your account status\n"
-             "The menus can also be ANSI screens you draw yourself - see the ReadMe."))
+             "New in 1.3: \"Your account status\".\n"
+             "Your menus are kept as they are - to offer it,\n"
+             "add this line to Menus/main.mnu:\n\n"
+             "item = A | 0 | status | | Your account status\n\n"
+             "Menus can also be ANSI screens you draw yourself:\nsee the ReadMe."))
 (complete 100)
 (exit (quiet))
