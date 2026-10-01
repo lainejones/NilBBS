@@ -40,4 +40,14 @@ void diz_build(const char *prog, const char *version, char desc[][DIZ_W + 1], in
 /* take other boards' ads out of an archive (patterns in BBS:Config/StripAds.cfg; top-level files only,
    never FILE_ID.DIZ; the archive keeps its date).  Returns how many went; their names go in `removed`. */
 LONG ads_strip(const char *archive, char *removed, LONG max);
+
+/* the sysop's archive tools (BBSControl): what's in an LhA / Zip archive, and taking a file out of it
+   (the archive keeps its date and protection bits).  arc_list returns the entries (-1 = can't be read,
+   with the reason in err).  Zip needs UnZip and Zip installed; the commands are NilBBS.cfg settings. */
+#define ARC_LHA 1
+#define ARC_ZIP 2
+struct ArcEntry { char name[108]; ULONG size; char date[20]; };
+int  arc_kind(const char *name);                 /* ARC_LHA, ARC_ZIP or 0 */
+LONG arc_list(const char *archive, struct ArcEntry *e, LONG max, char *err, LONG errmax);
+BOOL arc_delete(const char *archive, const char *name, char *err, LONG errmax);
 #endif

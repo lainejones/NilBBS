@@ -27,24 +27,29 @@
 #include <workbench/startup.h>
 #include <proto/wb.h>
 #include <proto/icon.h>
+#include <proto/asl.h>
+#include <libraries/asl.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "../common/bbs.h"
+#include "../common/dizcore.h"
 
 static const char __attribute__((used)) verstag[] = "$VER: BBSControl " BBS_VERSION " (" BBS_VERDATE ")";
 
 struct IntuitionBase *IntuitionBase;
 struct Library *GadToolsBase;
 struct GfxBase *GfxBase;
-struct Library *WorkbenchBase, *IconBase;
+struct Library *WorkbenchBase, *IconBase, *AslBase;   /* asl: the archive picker (optional) */
 
 enum { GID_NODES = 1, GID_KICK, GID_KICKBAN, GID_MSG, GID_SEND, GID_SENDALL,
        GID_BANS, GID_UNBAN, GID_BANIP, GID_BANMIN, GID_BAN, GID_RELOAD, GID_SHUTDOWN, GID_STATUS,
        GID_IMPORT, GID_OLTRIM, GID_OLCLEAR, GID_LCCLEAR, GID_BANWIN, GID_BANCLOSE,
        GID_CHAT, GID_PAGECHAT, GID_PAGENO, GID_CHATLV, GID_CHATIN, GID_CHATEND, GID_RESET,
-       GID_BANWHY, GID_LOGON, GID_BANLOG, GID_LOGLIST, GID_LOGREFRESH, GID_LOGCLOSE };
+       GID_BANWHY, GID_LOGON, GID_BANLOG, GID_LOGLIST, GID_LOGREFRESH, GID_LOGCLOSE,
+       GID_WALLWIN, GID_WALLLIST, GID_WALLSTATUS, GID_WALLDEL, GID_WALLTRIM, GID_WALLCLEAR, GID_WALLREFRESH, GID_WALLCLOSE,
+       GID_ARCWIN, GID_ARCLIST, GID_ARCSTATUS, GID_ARCPATH, GID_ARCPICK, GID_ARCDEL, GID_ARCREFRESH, GID_ARCCLOSE };
        /* new IDs go last: tests click gadgets by number (t35) */
 
 #define MAXLINES (MAX_NODES > MAX_BANS ? MAX_NODES : MAX_BANS)
@@ -308,10 +313,10 @@ static struct Gadget *make_gadgets(struct Screen *scr)
     g = CreateGadget(BUTTON_KIND, g, &ng, TAG_END);
 
     ng.ng_LeftEdge = left; ng.ng_TopEdge += bh + 6; ng.ng_Width = 140;
-    ng.ng_GadgetText = "Trim one-liners"; ng.ng_GadgetID = GID_OLTRIM;
+    ng.ng_GadgetText = "The wall..."; ng.ng_GadgetID = GID_WALLWIN;     /* the one-liners: see, delete, trim, clear */
     g = CreateGadget(BUTTON_KIND, g, &ng, TAG_END);
     ng.ng_LeftEdge = left + 146; ng.ng_Width = 140;
-    ng.ng_GadgetText = "Clear one-liners"; ng.ng_GadgetID = GID_OLCLEAR;
+    ng.ng_GadgetText = "Archives..."; ng.ng_GadgetID = GID_ARCWIN;      /* look inside an LhA / Zip, delete a file */
     g = CreateGadget(BUTTON_KIND, g, &ng, TAG_END);
     ng.ng_LeftEdge = left + 292; ng.ng_Width = 162;
     ng.ng_GadgetText = "Clear last callers"; ng.ng_GadgetID = GID_LCCLEAR;
@@ -512,6 +517,345 @@ static void open_logwin(void)
     GT_RefreshWindow(logwin, NULL);
 }
 
+/* ---- a window of a list and buttons (the wall, archives): shared bits ------------------------ */
+struct LWin {
+    struct Window *w;
+    struct Gadget *glist, *lv, *status, *path;
+    struct List list;
+    struct Node *nodes;
+    char *text;                         /* nodes' strings, one block */
+    LONG n, sel;
+    char statustext[120];
+};
+static struct LWin wall, arc;
+
+static void lw_empty(struct LWin *l)
+{
+    l->list.lh_Head = (struct Node *)&l->list.lh_Tail;       /* an empty list, set up by hand */
+    l->list.lh_Tail = NULL;
+    l->list.lh_TailPred = (struct Node *)&l->list.lh_Head;
+}
+
+/* detach the list from the listview, free it, start a new one of n rows of rowlen characters */
+static char *lw_begin(struct LWin *l, LONG n, int rowlen)
+{
+    if (l->w && l->lv) GT_SetGadgetAttrs(l->lv, l->w, NULL, GTLV_Labels, ~0UL, TAG_END);
+    if (l->nodes) FreeVec(l->nodes);
+    if (l->text) FreeVec(l->text);
+    l->nodes = NULL; l->text = NULL; l->n = 0; l->sel = -1;
+    lw_empty(l);
+    if (n <= 0) return NULL;
+    if (!(l->nodes = AllocVec(sizeof(struct Node) * n, MEMF_CLEAR)) || !(l->text = AllocVec(n * rowlen, MEMF_CLEAR))) {
+        if (l->nodes) FreeVec(l->nodes);
+        l->nodes = NULL;
+        return NULL;
+    }
+    return l->text;
+}
+
+static void lw_add(struct LWin *l, char *row)
+{
+    l->nodes[l->n].ln_Name = row;
+    AddTail(&l->list, &l->nodes[l->n]);
+    l->n++;
+}
+
+static void lw_show(struct LWin *l, LONG top)
+{
+    if (l->w && l->lv) GT_SetGadgetAttrs(l->lv, l->w, NULL, GTLV_Labels, (ULONG)&l->list, GTLV_Selected, ~0UL,
+                                         GTLV_Top, top < 0 ? 0 : top, TAG_END);
+}
+
+static void lw_status(struct LWin *l, const char *s)
+{
+    str_copy(l->statustext, s, sizeof(l->statustext));
+    if (l->w && l->status) GT_SetGadgetAttrs(l->status, l->w, NULL, GTTX_Text, (ULONG)l->statustext, TAG_END);
+}
+
+static void lw_close(struct LWin *l)
+{
+    if (l->w) CloseWindow(l->w);
+    l->w = NULL;
+    if (l->glist) FreeGadgets(l->glist);
+    l->glist = NULL; l->lv = l->status = l->path = NULL;
+    lw_begin(l, 0, 0);
+}
+
+static BOOL lw_ask(struct Window *w, const char *q, const char *buttons)
+{
+    struct EasyStruct es = { sizeof(struct EasyStruct), 0, (UBYTE *)"NilBBS Control", (UBYTE *)q, (UBYTE *)buttons };
+    return EasyRequestArgs(w, &es, NULL, NULL) == 1;
+}
+
+/* a listview with a heading, a status line and one row of buttons (label, id; NULL-terminated).
+ * pathid: a string gadget (with a label) above the list, for the archive window */
+static BOOL lw_open(struct LWin *l, const char *title, const char *head, const char *pathlabel, UWORD pathid,
+                    UWORD lvid, UWORD statusid, const char **labels, const UWORD *ids)
+{
+    struct NewGadget ng;
+    struct Gadget *g;
+    struct Screen *scr = pubscr;
+    UWORD fh, bh, top, w, h, lvh, left, nb, bw, i;
+    if (!scr) return FALSE;
+    fh = scr->Font->ta_YSize; bh = fh + 6; top = scr->WBorTop + fh + 1 + 4;
+    w = scr->Width - 40 > 620 ? 620 : scr->Width - 40;
+    left = scr->WBorLeft + 8;
+    lvh = fh * 14 + 4;
+    h = top + (pathlabel ? bh + 6 : 0) + fh + 3 + lvh + 4 + bh + 4 + bh + 6 + scr->WBorBottom;
+    if (h > scr->Height - 10) { lvh -= h - (scr->Height - 10); h = scr->Height - 10; }
+    lw_empty(l);
+    g = CreateContext(&l->glist);
+    memset(&ng, 0, sizeof(ng));
+    ng.ng_VisualInfo = vi; ng.ng_TextAttr = scr->Font;
+    ng.ng_LeftEdge = left; ng.ng_TopEdge = top; ng.ng_Width = w - 16; ng.ng_Height = bh;
+    if (pathlabel) {
+        ng.ng_LeftEdge = left + 72; ng.ng_Width = w - 16 - 72 - 86;
+        ng.ng_GadgetText = (UBYTE *)pathlabel; ng.ng_Flags = PLACETEXT_LEFT; ng.ng_GadgetID = pathid;
+        g = l->path = CreateGadget(STRING_KIND, g, &ng, GTST_MaxChars, PATHLEN - 1, TAG_END);
+        ng.ng_LeftEdge += ng.ng_Width + 6; ng.ng_Width = 80; ng.ng_Flags = 0;
+        ng.ng_GadgetText = (UBYTE *)"Pick..."; ng.ng_GadgetID = pathid + 1;
+        g = CreateGadget(BUTTON_KIND, g, &ng, TAG_END);
+        ng.ng_LeftEdge = left; ng.ng_Width = w - 16; ng.ng_TopEdge += bh + 6;
+    }
+    {   /* the column headings, lined up with the rows */
+        struct NewGadget hg = ng;
+        hg.ng_LeftEdge = left + 4; hg.ng_Width = w - 24; hg.ng_Height = fh + 2;
+        hg.ng_GadgetText = NULL; hg.ng_Flags = 0; hg.ng_GadgetID = 0;
+        g = CreateGadget(TEXT_KIND, g, &hg, GTTX_Text, (ULONG)head, TAG_END);
+    }
+    ng.ng_TopEdge += fh + 3; ng.ng_Height = lvh;
+    ng.ng_GadgetText = NULL; ng.ng_Flags = 0; ng.ng_GadgetID = lvid;
+    g = l->lv = CreateGadget(LISTVIEW_KIND, g, &ng, GTLV_Labels, (ULONG)&l->list, GTLV_ShowSelected, 0UL, TAG_END);
+    ng.ng_TopEdge += lvh + 4; ng.ng_Height = bh; ng.ng_GadgetID = statusid;
+    g = l->status = CreateGadget(TEXT_KIND, g, &ng, GTTX_Border, TRUE, GTTX_Text, (ULONG)l->statustext, TAG_END);
+    for (nb = 0; labels[nb]; nb++) ;
+    bw = (w - 16 - (nb - 1) * 6) / nb;
+    ng.ng_TopEdge += bh + 4;
+    for (i = 0; i < nb; i++) {
+        ng.ng_LeftEdge = left + i * (bw + 6);
+        ng.ng_Width = i == nb - 1 ? w - 16 - i * (bw + 6) : bw;
+        ng.ng_GadgetText = (UBYTE *)labels[i]; ng.ng_GadgetID = ids[i];
+        g = CreateGadget(BUTTON_KIND, g, &ng, TAG_END);
+    }
+    if (!g || !(l->w = OpenWindowTags(NULL,
+            WA_Title, (ULONG)title,
+            WA_Left, 20, WA_Top, win ? win->TopEdge + 16 : 16,
+            WA_InnerWidth, w, WA_Height, h,
+            WA_Gadgets, (ULONG)l->glist,
+            WA_DragBar, TRUE, WA_DepthGadget, TRUE, WA_CloseGadget, TRUE, WA_Activate, TRUE,
+            WA_PubScreen, (ULONG)pubscr,
+            WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_REFRESHWINDOW | LISTVIEWIDCMP | BUTTONIDCMP | STRINGIDCMP,
+            TAG_END))) {
+        lw_close(l);
+        DisplayBeep(NULL);
+        return FALSE;
+    }
+    GT_RefreshWindow(l->w, NULL);
+    return TRUE;
+}
+
+/* ---- The Wall: every one-liner (the newest at the bottom), who really wrote it, delete / trim / clear ---- */
+static LONG wall_total;
+
+static void wall_load(void)
+{
+    OneLine *a;
+    LONG n, i;
+    char *rows;
+    if (S) ObtainSemaphore(&S->msglock);
+    n = oneliners_load(&a);
+    if (S) ReleaseSemaphore(&S->msglock);
+    wall_total = n;
+    rows = lw_begin(&wall, n, 120);
+    for (i = 0; rows && i < n; i++) {
+        char line[OL_LINE], *f[4], *r = rows + i * 120, how[16] = "";
+        LONG nf;
+        str_copy(line, a[i], sizeof(line));
+        nf = str_split(line, '|', f, 4);
+        if (nf == 4) {
+            char *q;
+            for (q = f[3]; *q; q++) {
+                if (*q == 'a') strcat(how, "anon ");
+                else if (*q == 'c' && q[1]) { sprintf(how + strlen(how), "c%d ", atoi(q + 1)); }
+            }
+        }
+        if (nf < 3) sprintf(r, "%4ld  %.100s", (long)(i + 1), a[i]);
+        else sprintf(r, "%4ld  %-16.16s %-9.9s %-9.9s %.60s", (long)(i + 1), f[0], f[1], how, f[2]);
+        lw_add(&wall, r);
+    }
+    if (a) FreeVec(a);
+    lw_show(&wall, wall.n - 12);
+    {
+        char s[80];
+        sprintf(s, "%ld line(s); callers see the newest 12.  Pick one to delete it.", (long)n);
+        lw_status(&wall, s);
+    }
+}
+
+static void open_wallwin(void)
+{
+    static const char *labels[] = { "Delete line", "Trim...", "Clear wall", "Refresh", "Close", NULL };
+    static const UWORD ids[] = { GID_WALLDEL, GID_WALLTRIM, GID_WALLCLEAR, GID_WALLREFRESH, GID_WALLCLOSE };
+    static char head[100];
+    if (wall.w) { wall_load(); WindowToFront(wall.w); ActivateWindow(wall.w); return; }
+    sprintf(head, "%4s  %-16s %-9s %-9s %s", "#", "Written by", "Date", "Shown as", "Text");
+    if (lw_open(&wall, "NilBBS - the wall (one-liners)", head, NULL, 0, GID_WALLLIST, GID_WALLSTATUS, labels, ids))
+        wall_load();
+}
+
+static void wall_action(UWORD gid)
+{
+    char done[120];
+    LONG n = 0;
+    if (gid == GID_WALLREFRESH) { wall_load(); return; }
+    if (gid != GID_WALLDEL && gid != GID_WALLTRIM && gid != GID_WALLCLEAR) return;   /* the list, the status line */
+    if (gid == GID_WALLDEL) {
+        UBYTE *del;
+        char q[160];
+        if (wall.sel < 0 || wall.sel >= wall.n) { DisplayBeep(NULL); lw_status(&wall, "Pick a line first."); return; }
+        sprintf(q, "Delete this line from the wall?\n\n%.110s", wall.nodes[wall.sel].ln_Name + 6);
+        if (!lw_ask(wall.w, q, "Delete|Cancel")) return;
+        if (!(del = AllocVec(wall_total + 2, MEMF_CLEAR))) return;
+        del[wall.sel + 1] = 1;
+        if (S) ObtainSemaphore(&S->msglock);
+        n = oneliners_delete(del, wall_total + 1);
+        if (S) ReleaseSemaphore(&S->msglock);
+        FreeVec(del);
+        sprintf(done, "Line %ld deleted.", (long)(wall.sel + 1));
+    } else {
+        struct Cfg *c = cfg_load(bbs_config());
+        LONG keep = c ? cfg_int(c, "oneliners_keep", 50) : 50;
+        char q[120];
+        if (c) cfg_free(c);
+        if (keep <= 0) keep = 50;
+        if (gid == GID_WALLTRIM) sprintf(q, "Keep only the newest %ld lines?\n(oneliners_keep in NilBBS.cfg)", (long)keep);
+        else strcpy(q, "Delete EVERY line on the wall?");
+        if (!lw_ask(wall.w, q, gid == GID_WALLTRIM ? "Trim|Cancel" : "Clear|Cancel")) return;
+        if (S) ObtainSemaphore(&S->msglock);
+        n = gid == GID_WALLTRIM ? oneliners_trim(keep) : oneliners_clear();
+        if (S) ReleaseSemaphore(&S->msglock);
+        sprintf(done, "%ld line(s) removed from the wall.", (long)n);
+    }
+    bbs_log(BBS_SYSLOG, "BBSControl: %s", done);
+    wall_load();
+    lw_status(&wall, done);
+}
+
+/* ---- Archives: look inside an LhA / Zip archive and take a file out of it ------------------------ */
+static struct ArcEntry *arc_e;
+static char arc_file[PATHLEN];
+
+static void arc_load(void)
+{
+    char err[160], *rows;
+    LONG n, i;
+    if (!arc_e && !(arc_e = AllocVec(sizeof(struct ArcEntry) * 1000, MEMF_CLEAR))) return;
+    if (!arc_file[0]) { lw_begin(&arc, 0, 0); lw_show(&arc, 0); lw_status(&arc, "Type an archive's path, or Pick..."); return; }
+    n = arc_list(arc_file, arc_e, 1000, err, sizeof(err));
+    rows = lw_begin(&arc, n, 140);
+    for (i = 0; rows && i < n; i++) {
+        char *r = rows + i * 140;
+        sprintf(r, "%10lu  %-10.10s  %.100s", (unsigned long)arc_e[i].size, arc_e[i].date, arc_e[i].name);
+        lw_add(&arc, r);
+    }
+    lw_show(&arc, 0);
+    if (n < 0 || (!n && err[0])) lw_status(&arc, err);
+    else {
+        char s[120];
+        sprintf(s, "%ld file(s) in %.60s", (long)n, FilePart((STRPTR)arc_file));
+        lw_status(&arc, s);
+    }
+}
+
+static void arc_set(const char *path)
+{
+    str_copy(arc_file, path, sizeof(arc_file));
+    if (arc.w && arc.path) GT_SetGadgetAttrs(arc.path, arc.w, NULL, GTST_String, (ULONG)arc_file, TAG_END);
+    arc_load();
+}
+
+static void arc_pick(void)
+{
+    struct FileRequester *fr;
+    char drawer[PATHLEN];
+    if (!AslBase) { DisplayBeep(NULL); lw_status(&arc, "No asl.library - type the path instead."); return; }
+    str_copy(drawer, arc_file[0] ? arc_file : "BBS:Files/", sizeof(drawer));
+    *PathPart((STRPTR)drawer) = 0;
+    if (!drawer[0]) strcpy(drawer, "BBS:Files");
+    if (!(fr = AllocAslRequestTags(ASL_FileRequest, ASLFR_Window, (ULONG)arc.w,
+            ASLFR_TitleText, (ULONG)"An archive to look inside (.lha .lzh .zip)",
+            ASLFR_InitialDrawer, (ULONG)drawer, ASLFR_InitialPattern, (ULONG)"#?.(lha|lzh|zip)",
+            ASLFR_DoPatterns, TRUE, ASLFR_SleepWindow, TRUE, TAG_END))) return;
+    if (AslRequest(fr, NULL) && fr->fr_File[0]) {
+        char p[PATHLEN];
+        str_copy(p, (char *)fr->fr_Drawer, sizeof(p));
+        AddPart((STRPTR)p, fr->fr_File, sizeof(p));
+        arc_set(p);
+    }
+    FreeAslRequest(fr);
+}
+
+static void open_arcwin(void)
+{
+    static const char *labels[] = { "Delete from archive", "Refresh", "Close", NULL };
+    static const UWORD ids[] = { GID_ARCDEL, GID_ARCREFRESH, GID_ARCCLOSE };
+    static char head[100];
+    static struct Cfg *cfg;
+    if (arc.w) { WindowToFront(arc.w); ActivateWindow(arc.w); return; }
+    /* dizcore's archive commands: NilBBS.cfg, a scratch drawer, and the BBS's file lock while it runs */
+    if (!cfg) cfg = cfg_load(bbs_config());
+    diz_env.cfg = cfg;
+    strcpy(diz_env.work, "T:BBSControl");
+    { BPTR l = CreateDir((STRPTR)diz_env.work); if (l) UnLock(l); }
+    diz_env.lock = S ? &S->filelock : NULL;
+    sprintf(head, "%10s  %-10s  %s", "Size", "Date", "Name");
+    if (lw_open(&arc, "NilBBS - inside an archive", head, "Archive", GID_ARCPATH, GID_ARCLIST, GID_ARCSTATUS,
+                labels, ids)) {
+        if (arc_file[0]) GT_SetGadgetAttrs(arc.path, arc.w, NULL, GTST_String, (ULONG)arc_file, TAG_END);
+        arc_load();
+    }
+}
+
+static void arc_action(UWORD gid)
+{
+    if (gid == GID_ARCPATH) arc_set(((struct StringInfo *)arc.path->SpecialInfo)->Buffer);
+    else if (gid == GID_ARCPICK) arc_pick();
+    else if (gid == GID_ARCREFRESH) arc_load();
+    else if (gid == GID_ARCDEL) {
+        char q[300], err[160], done[200];
+        const char *name;
+        if (arc.sel < 0 || arc.sel >= arc.n) { DisplayBeep(NULL); lw_status(&arc, "Pick a file in the list first."); return; }
+        name = arc_e[arc.sel].name;
+        sprintf(q, "Take this file out of the archive?\n\n%.100s\n\nfrom %.100s\n\n(The archive keeps its date; this can't be undone.)",
+                name, arc_file);
+        if (!lw_ask(arc.w, q, "Delete|Cancel")) return;
+        if (arc_delete(arc_file, name, err, sizeof(err))) {
+            sprintf(done, "Deleted %.60s from %.60s", name, FilePart((STRPTR)arc_file));
+            bbs_log(BBS_SYSLOG, "BBSControl: deleted %s from %s", name, arc_file);
+            arc_load();
+            lw_status(&arc, done);
+        } else { DisplayBeep(NULL); lw_status(&arc, err); }
+    }
+}
+
+/* both windows' messages; FALSE = the window was closed */
+static void lw_input(struct LWin *l, void (*act)(UWORD), UWORD closeid)
+{
+    struct IntuiMessage *im;
+    while (l->w && (im = GT_GetIMsg(l->w->UserPort))) {
+        ULONG cls = im->Class;
+        UWORD code = im->Code;
+        struct Gadget *gad = (struct Gadget *)im->IAddress;
+        GT_ReplyIMsg(im);
+        if (cls == IDCMP_REFRESHWINDOW) { GT_BeginRefresh(l->w); GT_EndRefresh(l->w, TRUE); continue; }
+        if (cls == IDCMP_CLOSEWINDOW) { lw_close(l); break; }
+        if (cls != IDCMP_GADGETUP) continue;
+        if (gad->GadgetID == closeid) { lw_close(l); break; }
+        if (gad == l->lv) { l->sel = code; continue; }
+        act(gad->GadgetID);
+    }
+}
+
 static BOOL open_win(void)
 {
     struct Screen *scr = pubscr;
@@ -551,6 +895,8 @@ static void iconify(void)
     }
     close_logwin();
     close_banwin();
+    lw_close(&wall);
+    lw_close(&arc);
     win_x = win->LeftEdge; win_y = win->TopEdge;
     zoomed = (win->Flags & WFLG_ZOOMED) ? 1 : 0;
     ClearMenuStrip(win);
@@ -914,6 +1260,7 @@ int main(void)
 
     IntuitionBase = (struct IntuitionBase *)OpenLibrary((STRPTR)"intuition.library", 37);
     GadToolsBase = OpenLibrary((STRPTR)"gadtools.library", 37);
+    AslBase = OpenLibrary((STRPTR)"asl.library", 38);
     GfxBase = (struct GfxBase *)OpenLibrary((STRPTR)"graphics.library", 37);
     if (!IntuitionBase || !GadToolsBase || !GfxBase) goto out;
     WorkbenchBase = OpenLibrary((STRPTR)"workbench.library", 37);     /* for iconify; optional */
@@ -951,6 +1298,8 @@ int main(void)
                           (chatwin ? 1UL << chatwin->UserPort->mp_SigBit : 0) |
                           (banwin ? 1UL << banwin->UserPort->mp_SigBit : 0) |
                           (logwin ? 1UL << logwin->UserPort->mp_SigBit : 0) |
+                          (wall.w ? 1UL << wall.w->UserPort->mp_SigBit : 0) |
+                          (arc.w ? 1UL << arc.w->UserPort->mp_SigBit : 0) |
                           (appport ? 1UL << appport->mp_SigBit : 0) |
                           (timer_open ? 1UL << tport->mp_SigBit : 0));
         struct IntuiMessage *im;
@@ -968,6 +1317,8 @@ int main(void)
                 if (gad->GadgetID == GID_LOGREFRESH) reload_logwin();
             }
         }
+        lw_input(&wall, wall_action, GID_WALLCLOSE);
+        lw_input(&arc, arc_action, GID_ARCCLOSE);
         while (pagewin && (im = GT_GetIMsg(pagewin->UserPort))) {
             ULONG cls = im->Class;
             struct Gadget *gad = (struct Gadget *)im->IAddress;
@@ -1097,6 +1448,8 @@ int main(void)
                     break;
                 }
                 case GID_BANWIN: open_banwin(); break;
+                case GID_WALLWIN: open_wallwin(); break;
+                case GID_ARCWIN: open_arcwin(); break;
                 case GID_KICK:  kick(FALSE); refresh(); break;
                 case GID_KICKBAN: kick(TRUE); refresh(); break;
                 case GID_RESET: reset_node(); refresh(); break;
@@ -1166,6 +1519,10 @@ out:
     }
     close_logwin();
     close_banwin();
+    lw_close(&wall);
+    lw_close(&arc);
+    if (arc_e) FreeVec(arc_e);
+    if (AslBase) CloseLibrary(AslBase);
     if (win) { ClearMenuStrip(win); CloseWindow(win); }
     if (menus) FreeMenus(menus);
     if (pubscr) UnlockPubScreen(NULL, pubscr);

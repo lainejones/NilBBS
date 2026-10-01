@@ -43,8 +43,6 @@ BOOL msg_area_is_email(int i);
 BOOL msg_visible(int i, struct MsgHdr *h);
 ULONG msg_post_text(int ai, const char *to, const char *subj, ULONG replyto, const char *text);
 /* fileui.c */
-BOOL file_send_path(const char *path, const char *name);
-LONG file_receive_dir(const char *dir, char names[][32], LONG max, const char *xname);
 
 #define QWK_REC   128
 #define QWK_EOL   0xE3

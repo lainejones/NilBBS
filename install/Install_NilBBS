@@ -140,7 +140,7 @@
   (
     ; an update: the programs and icons only
     (copyfiles (source "BBS") (dest bbsdir)
-               (choices "NilBBS" "BBSNode" "BBSCtl" "BBSControl" "BBSSchedule" "BBSConfig" "BBSToss" "BBSMaint" "NilTerm" "NilTerm.info"
+               (choices "NilBBS" "BBSNode" "BBSCtl" "BBSControl" "BBSSchedule" "BBSConfig" "DoorCheck" "BBSToss" "BBSMaint" "NilTerm" "NilTerm.info"
                         "BBSControl.info" "BBSSchedule.info" "BBSConfig.info"
                         "Start NilBBS" "Start NilBBS.info" "Stop NilBBS" "Stop NilBBS.info"))
     ; a BBS installed before the rename (NuzBBS, 2026): its config, its boot lines, the old programs
@@ -179,6 +179,13 @@
   ))
 (if (not (exists (tackon instdest "BBS.info")))
     (copyfiles (source "BBS.info") (dest instdest)))
+; the /X door library: NilBBS uses only its own AEDoor.library (3.x).  An older one in LIBS: (the
+; original 2.x from an /X door package) is kept as LIBS:AEDoor.library.old and replaced.
+(if (exists "LIBS:AEDoor.library")
+    (if (< (getversion "LIBS:AEDoor.library") (* 3 65536))
+        (rename "LIBS:AEDoor.library" "LIBS:AEDoor.library.old")))
+(copyfiles (prompt "Installing NilBBS's AEDoor.library (for AmiExpress /X doors) in LIBS:")
+           (help @copyfiles-help) (source "Libs") (dest "LIBS:") (choices "AEDoor.library"))
 (procedure P_EXEC (run (cat "Protect \"" (tackon bbsdir prog) "\" +e") (safe)))
 (set prog "NilBBS") (P_EXEC)
 (set prog "BBSNode") (P_EXEC)
@@ -186,6 +193,7 @@
 (set prog "BBSControl") (P_EXEC)
 (set prog "BBSSchedule") (P_EXEC)
 (set prog "BBSConfig") (P_EXEC)
+(set prog "DoorCheck") (P_EXEC)
 (set prog "BBSToss") (P_EXEC)
 (set prog "BBSMaint") (P_EXEC)
 (set prog "NilTerm") (P_EXEC)
@@ -262,10 +270,10 @@
              "Put your own network on an \"allow\" line in Config/IPFilter.cfg.")
     (message "NilBBS in " bbsdir " is updated.\n\n"
              "Restart it (Stop NilBBS, then Start NilBBS) to use the new programs.\n\n"
-             "New in 1.3: \"Your account status\".\n"
-             "Your menus are kept as they are - to offer it,\n"
-             "add this line to Menus/main.mnu:\n\n"
-             "item = A | 0 | status | | Your account status\n\n"
-             "Menus can also be ANSI screens you draw yourself:\nsee the ReadMe."))
+             "New since 1.3: \"Your account status\" and menus as\n"
+             "ANSI screens.  Your menus are kept as they are -\n"
+             "in BBSConfig's Menus page, \"Add status item\" puts it\n"
+             "on a menu and \"Make screen\" turns a menu into an\n"
+             "ANSI screen you can redraw.  See the ReadMe."))
 (complete 100)
 (exit (quiet))

@@ -437,7 +437,7 @@ static void export_area(int ai, BPTR *fh, char *path)
     for (i = 1; i <= total; i++) {
         UBYTE mh[14];
         char dt[24], *t;
-        LONG len;
+        LONG len = 0;
         BOOL ok;
         ObtainSemaphore(&S->msglock);
         ok = msg_scan_hdr(&ms, i, &h);

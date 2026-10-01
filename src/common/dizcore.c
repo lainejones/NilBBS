@@ -522,3 +522,113 @@ void diz_build(const char *prog, const char *version, char desc[][DIZ_W + 1], in
     out[n] = 0;
 }
 
+
+/* ---- an archive's contents, for the sysop (BBSControl): list them, delete one ----------------------
+ * LhA (.lha/.lzh) and Zip (.zip, when UnZip and Zip are installed).  The commands are NilBBS.cfg
+ * settings like the DIZ ones: arc_list_lha / arc_del_lha / arc_list_zip / arc_del_zip, with %a = the
+ * archive and %f = the file in it.  Each listing prints a dashed rule above and below its entries. */
+
+int arc_kind(const char *name)
+{
+    if (is_lha(name)) return ARC_LHA;
+    if (is_zip(name)) return ARC_ZIP;
+    return 0;
+}
+
+/* fill %a / %f into a command; FALSE if a name would reach the Shell unsafely */
+static BOOL arc_cmd(char *cmd, int size, const char *tmpl, const char *archive, const char *file)
+{
+    char *c = cmd;
+    const char *s, *q;
+    if (file) for (q = file; *q; q++) if (!shell_char_ok((UBYTE)*q) || *q == '"') return FALSE;
+    for (s = tmpl; *s && c < cmd + size - PATHLEN - 8; ) {
+        if (s[0] == '%' && s[1] == 'a') { c += sprintf(c, "%s", archive); s += 2; }
+        else if (s[0] == '%' && s[1] == 'f' && file) { c += sprintf(c, "%.*s", (int)(PATHLEN - 1), file); s += 2; }
+        else *c++ = *s++;
+    }
+    *c = 0;
+    return TRUE;
+}
+
+static const char *arc_tool(int kind) { return kind == ARC_ZIP ? "UnZip / Zip" : "LhA"; }
+
+LONG arc_list(const char *archive, struct ArcEntry *e, LONG max, char *err, LONG errmax)
+{
+    char dir[PATHLEN], list[PATHLEN], line[LINELEN], cmd[PATHLEN * 2 + 128];
+    struct LineReader lr;
+    int kind = arc_kind(archive), rules = 0;
+    LONG n = 0, rc;
+    BPTR out, in;
+    err[0] = 0;
+    if (!kind) { str_copy(err, "Not an archive NilBBS can open (LhA .lha/.lzh, Zip .zip).", errmax); return -1; }
+    arc_cmd(cmd, sizeof(cmd), kind == ARC_ZIP ? cfg_str(diz_env.cfg, "arc_list_zip", "UnZip -l \"%a\"")
+                                              : cfg_str(diz_env.cfg, "arc_list_lha", "LhA v \"%a\""), archive, NULL);
+    work_dir(dir, "arc");
+    path_join(list, dir, "list");
+    if (!(out = Open((STRPTR)list, MODE_NEWFILE))) { str_copy(err, "Can't write to the work drawer.", errmax); return -1; }
+    in = Open((STRPTR)"NIL:", MODE_OLDFILE);
+    rc = SystemTags((STRPTR)cmd, SYS_Input, in, SYS_Output, out, TAG_END);
+    Close(out);
+    if (in) Close(in);
+    if (!lr_open(&lr, list)) return -1;
+    while (n < max && lr_gets(&lr, line, sizeof(line)) >= 0) {
+        /* LhA v:     "    1245     469 62.3% 07-May-97 18:22:26  dir/name"   (size packed ratio date time name)
+         * UnZip -l:  "    1245  05-07-1997 18:22   dir/name"                  (size date time name) */
+        char *p = line, *f[6];
+        int nf, skip = kind == ARC_ZIP ? 3 : 5, i;
+        while (*p == ' ') p++;
+        if (p[0] == '-' && p[1] == '-') { if (++rules == 2) break; continue; }
+        if (rules != 1 || *p < '0' || *p > '9') continue;
+        for (nf = 0; nf < skip && *p; nf++) {
+            f[nf] = p;
+            while (*p && *p != ' ') p++;
+            if (*p) *p++ = 0;
+            while (*p == ' ') p++;
+        }
+        if (nf < skip || !*p) continue;
+        memset(&e[n], 0, sizeof(e[n]));
+        e[n].size = strtoul(f[0], NULL, 10);
+        str_copy(e[n].date, f[kind == ARC_ZIP ? 1 : 3], sizeof(e[n].date));
+        str_copy(e[n].name, str_trim(p), sizeof(e[n].name));
+        for (i = 0; e[n].name[i]; i++) if (e[n].name[i] == '\\') e[n].name[i] = '/';
+        n++;
+    }
+    lr_close(&lr);
+    DeleteFile((STRPTR)list);
+    if (!n && rc) sprintf(err, "%s couldn't read it (error %ld) - is %s installed?", arc_tool(kind), (long)rc, arc_tool(kind));
+    return n;
+}
+
+BOOL arc_delete(const char *archive, const char *name, char *err, LONG errmax)
+{
+    char cmd[PATHLEN * 2 + 128];
+    struct DateStamp ds;
+    BOOL have_date = datestamp_of(archive, &ds);
+    LONG prot = -1, rc;
+    int kind = arc_kind(archive);
+    err[0] = 0;
+    if (!kind) { str_copy(err, "Not an archive NilBBS can change.", errmax); return FALSE; }
+    if (!arc_cmd(cmd, sizeof(cmd), kind == ARC_ZIP ? cfg_str(diz_env.cfg, "arc_del_zip", "Zip >NIL: -q -d \"%a\" \"%f\"")
+                                                   : cfg_str(diz_env.cfg, "arc_del_lha", "LhA >NIL: -q d \"%a\" \"%f\""),
+                 archive, name)) {
+        str_copy(err, "That name has characters the Shell would act on - delete it with the archiver by hand.", errmax);
+        return FALSE;
+    }
+    {   /* the archiver writes a new file: keep the protection bits (and, below, the date) */
+        struct FileInfoBlock *fib = AllocDosObject(DOS_FIB, NULL);
+        BPTR l;
+        if (fib && (l = Lock((STRPTR)archive, ACCESS_READ))) {
+            if (Examine(l, fib)) prot = fib->fib_Protection;
+            UnLock(l);
+        }
+        if (fib) FreeDosObject(DOS_FIB, fib);
+    }
+    lk(TRUE);
+    rc = SystemTags((STRPTR)cmd, TAG_END);
+    lk(FALSE);
+    if (have_date) SetFileDate((STRPTR)archive, &ds);   /* it isn't a new upload */
+    if (prot >= 0) SetProtection((STRPTR)archive, prot);
+    if (rc) { sprintf(err, "%s failed (error %ld) - is %s installed?", kind == ARC_ZIP ? "Zip" : "LhA", (long)rc,
+                      arc_tool(kind)); return FALSE; }
+    return TRUE;
+}

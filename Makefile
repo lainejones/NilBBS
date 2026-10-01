@@ -20,7 +20,7 @@ NODE    = src/node/node.c src/node/spy.c src/node/telnet.c src/node/charset.c sr
           src/node/serial.c
 HDRS    = VERSION src/common/bbs.h src/common/cfg.h src/common/msgbase.h src/common/dizcore.h src/common/lang.h src/node/node.h src/node/zmodem.h
 
-all: out/NilBBS out/BBSNode out/BBSCtl out/BBSControl out/BBSSchedule out/BBSConfig out/BBSToss out/BBSMaint out/Guess out/XIMTest out/CNTest out/LCBDoor out/NilTerm
+all: out/NilBBS out/BBSNode out/BBSCtl out/BBSControl out/BBSSchedule out/BBSConfig out/DoorCheck out/BBSToss out/BBSMaint out/Guess out/XIMTest out/XIMProbe out/AEDoor.library out/CNTest out/LCBDoor out/NilTerm
 
 out/NilBBS: src/daemon/nilbbs.c $(COMMON) $(HDRS)
 	@mkdir -p out
@@ -42,17 +42,21 @@ out/BBSControl: src/ctl/bbscontrol.c $(COMMON) $(HDRS)
 	@mkdir -p out
 	$(CC) $(CFLAGS) -o $@ src/ctl/bbscontrol.c $(COMMON) $(LIBS)
 
-out/BBSConfig: src/config/bbsconfig.c src/config/ini.c src/config/ini.h $(COMMON) $(HDRS)
+out/BBSConfig: src/config/bbsconfig.c src/config/ini.c src/config/ini.h src/config/doorcheck.c src/config/doorcheck.h $(COMMON) $(HDRS)
 	@mkdir -p out
-	$(CC) $(CFLAGS) -Isrc/config -o $@ src/config/bbsconfig.c src/config/ini.c $(COMMON) $(LIBS)
+	$(CC) $(CFLAGS) -Isrc/config -o $@ src/config/bbsconfig.c src/config/ini.c src/config/doorcheck.c $(COMMON) $(LIBS)
+
+out/DoorCheck: src/config/dccli.c src/config/doorcheck.c src/config/doorcheck.h src/config/ini.c src/config/ini.h $(COMMON) $(HDRS)
+	@mkdir -p out
+	$(CC) $(CFLAGS) -Isrc/config -o $@ src/config/dccli.c src/config/doorcheck.c src/config/ini.c $(COMMON) $(LIBS)
 
 out/BBSToss: src/fido/bbstoss.c $(COMMON) $(HDRS)
 	@mkdir -p out
 	$(CC) $(CFLAGS) -o $@ src/fido/bbstoss.c $(COMMON) $(LIBS)
 
-out/BBSMaint: src/maint/bbsmaint.c src/maint/import.c $(COMMON) $(HDRS)
+out/BBSMaint: src/maint/bbsmaint.c src/maint/import.c src/maint/rexxmaint.c $(COMMON) $(HDRS)
 	@mkdir -p out
-	$(CC) $(CFLAGS) -o $@ src/maint/bbsmaint.c src/maint/import.c $(COMMON) $(LIBS)
+	$(CC) $(CFLAGS) -o $@ src/maint/bbsmaint.c src/maint/import.c src/maint/rexxmaint.c $(COMMON) $(LIBS)
 
 # NilTerm: the sysop's ANSI terminal (its own screen, the VGA font); util.c (run_with_stack), shared.c (WATCH=n + the live port), cfg.c (port= fallback); ntzm.c/ntxy.c = the node's ZMODEM/X/YMODEM (src/node) over NilTerm's connection
 out/NilTerm: src/nilterm/nilterm.c src/nilterm/nilfont.h src/nilterm/ntzio.h src/nilterm/ntzm.c src/nilterm/ntxy.c src/node/zmodem.c src/node/xymodem.c src/node/zmodem.h src/common/util.c src/common/shared.c src/common/cfg.c $(HDRS)
@@ -66,6 +70,17 @@ out/CNTest: src/doors/cntest.c
 out/XIMTest: src/doors/ximtest.c
 	@mkdir -p out
 	$(CC) $(CFLAGS) -o $@ src/doors/ximtest.c
+
+out/XIMProbe: src/doors/ximprobe.c
+	@mkdir -p out
+	$(CC) $(CFLAGS) -o $@ src/doors/ximprobe.c
+
+# our own AEDoor.library (the /X door API), freestanding: exec only
+out/AEDoor.library: src/aedoor/aedoor_start.S src/aedoor/aedoor.c
+	@mkdir -p out
+	$(CC) -m68000 -c -o out/aedoor_start.o src/aedoor/aedoor_start.S
+	$(CC) -m68000 -O2 -fomit-frame-pointer -ffreestanding -fno-builtin -fno-tree-loop-distribute-patterns -Wall -nostdlib -c -o out/aedoor.o src/aedoor/aedoor.c
+	$(CC) -m68000 -nostartfiles -nostdlib -s -o $@ out/aedoor_start.o out/aedoor.o
 
 out/Guess: src/doors/guess.c
 	@mkdir -p out
@@ -85,7 +100,7 @@ dist: all
 	rm -rf out/BBS
 	cp -r dist/BBS out/BBS
 	cp dist/BBS.info out/
-	cp out/NilBBS out/BBSNode out/BBSCtl out/BBSControl out/BBSSchedule out/BBSConfig out/BBSToss out/BBSMaint out/NilTerm out/BBS/
+	cp out/NilBBS out/BBSNode out/BBSCtl out/BBSControl out/BBSSchedule out/BBSConfig out/DoorCheck out/BBSToss out/BBSMaint out/NilTerm out/BBS/
 	mkdir -p out/BBS/Doors/Guess out/BBS/Doors/CNTest out/BBS/Doors/XIMTest
 	cp out/Guess out/BBS/Doors/Guess/
 	cp out/CNTest out/BBS/Doors/CNTest/

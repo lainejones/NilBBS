@@ -37,14 +37,19 @@ SCREENS - THE LOOK IS YOURS
   columns, left-aligned ($L right-aligns, $C centres).  The README on GitHub
   lists every code.
   A menu screen is only the picture: the keys still come from the items in
-  its .mnu, so keep the two in step.  Take the "screen =" line out and NilBBS
-  draws the menu from its items again.  Delete any screen and NilBBS draws its
+  its .mnu, so keep the two in step.  Delete any screen and NilBBS draws its
   own.
-  Updating from 1.2 or older: add the account status to your main menu with
-      item = A | 0 | status | | Your account status
-  in BBS:Menus/main.mnu.  For menu screens, copy the BBS/Text/*menu.* files of
-  this package into BBS:Text and add "screen = mainmenu" (messagesmenu,
-  filesmenu) to the matching .mnu - they show the standard items.
+  BBSConfig's Menus page does the menu side for you, per menu:
+    Make screen        draws Text/<menu>menu.ans + .asc from the menu as it is
+                       (its banner and items) and sets the Screen - then
+                       redraw it in your ANSI editor.  Run it again after
+                       adding items (it asks before replacing your drawing).
+    Screen...          pick any screen in BBS:Text for the menu
+    No screen          back to the menu drawn from its items
+    Add status item    adds "Your account status" on a free key
+  Updating from 1.2 or older: pick the main menu in BBSConfig and press
+  "Add status item", then Save.  Press "Make screen" on each menu you want
+  as an ANSI screen.
 
 WHAT'S IN THIS DRAWER
   Install_NilBBS    the installer
@@ -56,17 +61,30 @@ DOORS
     Guess     an AmigaDOS CLI program (type = cli) - its source is a template
     Hello     a CNet-style ARexx script (type = cnetrexx)
     CNTest    a CNet C PFile (type = cnetc)
-    XIMTest   an AmiExpress XIM door (type = xim; needs AEDoor.library)
+    XIMTest   an AmiExpress XIM door (type = xim; uses AEDoor.library - NilBBS has its own,
+              in Libs/, which the installer puts in LIBS:; an older 2.x one there is
+              kept as LIBS:AEDoor.library.old)
   Copy a section, change the name and command, and your door is on the menu -
-  or use BBSConfig's Doors page.  CNet PFiles and AmiExpress doors run as they are.
+  or use BBSConfig's Doors page: New, fill in Command, then Detect reads the door's
+  program and fills in its type and settings (CNet ARexx or C, AmiExpress /X or
+  ARexx, CLI; the assign its paths expect, old CNet 1.x screen codes...), and Check
+  tells you what would stop it running here.  Show switches between the Door page,
+  the options for that type of door, and what to do when a caller drops (Hang-up).
+  DoorCheck in the Shell does the same for every door in Doors.cfg.
+  CNet PFiles and AmiExpress doors run as they are.
   Door games come as their own packages, each with an installer that puts the game
   in BBS:PFiles and adds its Doors.cfg section (and works for CNet too).
 
 IN THE BBS DRAWER AFTER INSTALLING
   Start NilBBS / Stop NilBBS   start and stop the BBS
   BBSConfig                    every setting, users, menus, doors, areas
-  BBSControl                   the live sysop console: who's on, bans, one-liners
-                               - and where callers' pages pop up, with a chat window
+  DoorCheck [TAG]              checks each door's program and settings (Shell)
+  BBSControl                   the live sysop console: who's on, bans, the wall
+                               (see who wrote each line - even the anonymous ones -
+                               delete one, trim, clear), archives (look inside an
+                               LhA or Zip and take a file out of it; Zip needs
+                               UnZip + Zip installed) - and where callers' pages
+                               pop up, with a chat window
   BBSSchedule                  scheduled tasks: nightly maintenance, door maintenance,
                                mail, backups - add, edit, remove, run now
   NilTerm                      an ANSI BBS terminal (BBSControl's Logon button logs

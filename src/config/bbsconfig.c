@@ -21,6 +21,8 @@
 #include <proto/intuition.h>
 #include <proto/gadtools.h>
 #include <proto/graphics.h>
+#include <proto/asl.h>
+#include <libraries/asl.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,11 +30,13 @@
 #include "bbs.h"
 #include "ini.h"
 #include "lang.h"
+#include "doorcheck.h"
 
 static const char __attribute__((used)) verstag[] = "$VER: BBSConfig " BBS_VERSION " (" BBS_VERDATE ")";
 
 struct IntuitionBase *IntuitionBase;
 struct Library *GadToolsBase;
+struct Library *AslBase;                /* optional: the menu-screen picker */
 struct GfxBase *GfxBase;
 
 /* ---- field descriptions ---------------------------------------------------- */
@@ -55,7 +59,7 @@ struct Field {
     WORD  maxc;
 };
 
-static const char *cyc_door_type[] = { "cli", "cnetrexx", "cnetc", "xim", "rlogin", "telnet", "tcp", NULL };
+static const char *cyc_door_type[] = { "cli", "cnetrexx", "aim", "cnetc", "xim", "rlogin", "telnet", "tcp", NULL };
 static const char *cyc_dropfile[]  = { "door.sys", "dorinfo1.def", "door32.sys", "all", "none", NULL };
 static const char *cyc_charset[]   = { "cp437", "amiga", "latin1", NULL };
 static const char *cyc_cnetver[]   = { "4", "3", NULL };
@@ -104,30 +108,100 @@ static struct Field f_security[] = {
     { "Busy message",   "busy_message",      F_STR,  W_FULL, "\\r\\nAll nodes are busy - please call back later.\\r\\n", NULL, 200 },
     { NULL }
 };
-static struct Field f_doors[] = {
+/* Doors: three pages (Show: Door / Options / Hang-up), the Options page per door type -
+ * only what that type uses (door.c door_get + where each option is read) */
+static struct Field f_doors[] = {           /* Door: every type */
     { "Tag",            NULL,                F_STR,  W_HALF, "", NULL, 24 },
     { "Level",          "level",             F_INT,  W_HALF, "10", NULL, 3 },
     { "Name",           "name",              F_STR,  W_FULL, "", NULL, 47 },
+    { "Type",           "type",              F_CYC,  W_HALF, "cli", cyc_door_type, 0 },
+    { "Access ACS",     "acs",               F_STR,  W_HALF, "", NULL, 63 },
     { "Command",        "command",           F_STR,  W_FULL, "", NULL, 200 },
     { "Directory",      "dir",               F_STR,  W_FULL, "", NULL, 200 },
-    { "Type",           "type",              F_CYC,  W_HALF, "cli", cyc_door_type, 0 },
+    { "Assign",         "assign",            F_STR,  W_FULL, "", NULL, 100 },
+    { "Single",         "single",            F_BOOL, W_THIRD, "no", NULL, 0 },
+    { "Maint cmd",      "maint",             F_STR,  W_FULL, "", NULL, 200 },
+    { NULL }
+};
+#define DOOR_TYPE_FIELD 3                   /* f_doors[3] is Type */
+static struct Field f_dopt_cli[] = {        /* cli */
     { "Drop file",      "dropfile",          F_CYC,  W_HALF, "door.sys", cyc_dropfile, 0 },
     { "Charset",        "charset",           F_CYC,  W_HALF, "cp437", cyc_charset, 0 },
     { "Stack",          "stack",             F_INT,  W_HALF, "16384", NULL, 7 },
+    { "Stale lock",     "stale_lock",        F_STR,  W_HALF, "", NULL, 63 },
+    { "Amiga CSI",      "amigacsi",          F_BOOL, W_THIRD, "yes", NULL, 0 },
+    { "Arrows 9B",      "arrows8",           F_BOOL, W_THIRD, "no", NULL, 0 },
+    { "Raw out",        "rawout",            F_BOOL, W_THIRD, "no", NULL, 0 },
+    { NULL }
+};
+static struct Field f_dopt_rexx[] = {       /* cnetrexx, aim */
+    { "Charset",        "charset",           F_CYC,  W_HALF, "cp437", cyc_charset, 0 },
+    { "Panic grace",    "panic_grace",       F_INT,  W_HALF, "10", NULL, 4 },
+    { "Drop file",      "dropfile",          F_CYC,  W_HALF, "door.sys", cyc_dropfile, 0 },
+    { "Stale lock",     "stale_lock",        F_STR,  W_HALF, "", NULL, 63 },
+    { "Old MCI \\c1",   "old_mci",           F_BOOL, W_THIRD, "no", NULL, 0 },
+    { "TX newline",     "transmit_newline",  F_BOOL, W_THIRD, "yes", NULL, 0 },
+    { "Q quits",        "qquit",             F_BOOL, W_THIRD, "no", NULL, 0 },
+    { "Amiga CSI",      "amigacsi",          F_BOOL, W_THIRD, "yes", NULL, 0 },
+    { "Arrows 9B",      "arrows8",           F_BOOL, W_THIRD, "no", NULL, 0 },
+    { "Raw out",        "rawout",            F_BOOL, W_THIRD, "no", NULL, 0 },
+    { NULL }
+};
+static struct Field f_dopt_cnetc[] = {      /* cnetc */
+    { "Charset",        "charset",           F_CYC,  W_HALF, "cp437", cyc_charset, 0 },
+    { "CNet ver",       "cnet_version",      F_CYC,  W_HALF, "4", cyc_cnetver, 0 },
+    { "Stack",          "stack",             F_INT,  W_HALF, "16384", NULL, 7 },
+    { "Panic grace",    "panic_grace",       F_INT,  W_HALF, "10", NULL, 4 },
+    { "Drop file",      "dropfile",          F_CYC,  W_HALF, "door.sys", cyc_dropfile, 0 },
+    { "Stale lock",     "stale_lock",        F_STR,  W_HALF, "", NULL, 63 },
+    { NULL }
+};
+static struct Field f_dopt_xim[] = {        /* xim */
+    { "Charset",        "charset",           F_CYC,  W_HALF, "amiga", cyc_charset, 0 },
+    { "Stack",          "stack",             F_INT,  W_HALF, "16384", NULL, 7 },
+    { "Panic grace",    "panic_grace",       F_INT,  W_HALF, "10", NULL, 4 },
+    { "Drop file",      "dropfile",          F_CYC,  W_HALF, "door.sys", cyc_dropfile, 0 },
+    { "Stale lock",     "stale_lock",        F_STR,  W_HALF, "", NULL, 63 },
+    { "Debug log",      "debug",             F_BOOL, W_THIRD, "no", NULL, 0 },
+    { "Amiga CSI",      "amigacsi",          F_BOOL, W_THIRD, "yes", NULL, 0 },
+    { "Arrows 9B",      "arrows8",           F_BOOL, W_THIRD, "no", NULL, 0 },
+    { "Raw out",        "rawout",            F_BOOL, W_THIRD, "no", NULL, 0 },
+    { NULL }
+};
+static struct Field f_dopt_rlogin[] = {     /* rlogin */
     { "Host",           "host",              F_STR,  W_HALF, "", NULL, 79 },
     { "Port",           "port",              F_INT,  W_HALF, "513", NULL, 5 },
     { "Rlogin user",    "rlogin_user",       F_STR,  W_HALF, "%h", NULL, 60 },
-    { "Assign",         "assign",            F_STR,  W_HALF, "", NULL, 100 },
-    { "Panic grace",    "panic_grace",       F_INT,  W_HALF, "10", NULL, 4 },
-    { "CNet ver",       "cnet_version",      F_CYC,  W_HALF, "4", cyc_cnetver, 0 },
-    { "Single",         "single",            F_BOOL, W_THIRD, "no", NULL, 0 },
+    { "Rlogin term",    "rlogin_term",       F_STR,  W_HALF, "ansi-bbs/115200", NULL, 60 },
+    { "Charset",        "charset",           F_CYC,  W_HALF, "cp437", cyc_charset, 0 },
     { "Raw out",        "rawout",            F_BOOL, W_THIRD, "no", NULL, 0 },
-    { "Amiga CSI",      "amigacsi",          F_BOOL, W_THIRD, "yes", NULL, 0 },
-    { "Arrows 9B",      "arrows8",           F_BOOL, W_THIRD, "no", NULL, 0 },
-    { "Q quits",        "qquit",             F_BOOL, W_THIRD, "no", NULL, 0 },
-    { "TX newline",     "transmit_newline",  F_BOOL, W_THIRD, "yes", NULL, 0 },
-    { "Access ACS",     "acs",               F_STR,  W_HALF, "", NULL, 63 },
-    { "Maint cmd",      "maint",             F_STR,  W_FULL, "", NULL, 200 },
+    { NULL }
+};
+static struct Field f_dopt_net[] = {        /* telnet, tcp */
+    { "Host",           "host",              F_STR,  W_HALF, "", NULL, 79 },
+    { "Port",           "port",              F_INT,  W_HALF, "23", NULL, 5 },
+    { "Charset",        "charset",           F_CYC,  W_HALF, "cp437", cyc_charset, 0 },
+    { "Raw out",        "rawout",            F_BOOL, W_THIRD, "no", NULL, 0 },
+    { NULL }
+};
+static const char *cyc_hupread[] = { "eof", "error", NULL };
+static struct Field f_dhup[] = {            /* cli, xim: a caller who drops */
+    { "After drop",     "hangup_read",       F_CYC,  W_HALF, "eof", cyc_hupread, 0 },
+    { "Keys",           "hangup_keys",       F_STR,  W_HALF, "", NULL, 150 },
+    { "Rounds",         "hangup_rounds",     F_INT,  W_HALF, "30", NULL, 4 },
+    { "Grace secs",     "hangup_grace",      F_INT,  W_HALF, "90", NULL, 4 },
+    { "Rule 1",         "hangup_1",          F_STR,  W_HALF, "", NULL, 118 },
+    { "Rule 2",         "hangup_2",          F_STR,  W_HALF, "", NULL, 118 },
+    { "Rule 3",         "hangup_3",          F_STR,  W_HALF, "", NULL, 118 },
+    { "Rule 4",         "hangup_4",          F_STR,  W_HALF, "", NULL, 118 },
+    { "Rule 5",         "hangup_5",          F_STR,  W_HALF, "", NULL, 118 },
+    { "Rule 6",         "hangup_6",          F_STR,  W_HALF, "", NULL, 118 },
+    { "Rule 7",         "hangup_7",          F_STR,  W_HALF, "", NULL, 118 },
+    { "Rule 8",         "hangup_8",          F_STR,  W_HALF, "", NULL, 118 },
+    { "Rule 9",         "hangup_9",          F_STR,  W_HALF, "", NULL, 118 },
+    { "Rule 10",        "hangup_10",         F_STR,  W_HALF, "", NULL, 118 },
+    { "Rule 11",        "hangup_11",         F_STR,  W_HALF, "", NULL, 118 },
+    { "Rule 12",        "hangup_12",         F_STR,  W_HALF, "", NULL, 118 },
     { NULL }
 };
 static struct Field f_msgareas[] = {
@@ -307,6 +381,7 @@ static struct Field f_user_set[] = {
     { "No pages",       "nopage",            F_BOOL, W_THIRD, "no", NULL, 0 },
     { "Line editor",    "lineedit",          F_BOOL, W_THIRD, "no", NULL, 0 },
     { "Term set",       "termset",           F_BOOL, W_THIRD, "no", NULL, 0 },
+    { "More off",       "nomore",            F_BOOL, W_THIRD, "no", NULL, 0 },
     { NULL }
 };
 static struct Field f_user_cnt[] = {
@@ -325,6 +400,12 @@ static struct Field f_user_cnt[] = {
 static struct Field *user_pages[] = { f_user, f_user_set, f_user_cnt };
 static const char *cyc_upage[] = { "Account", "Settings", "Counters", NULL };
 static int upage;
+/* Doors: which page, and the Show labels (Hang-up only for the types that use it) */
+static const char *cyc_dpage3[] = { "Door", "Options", "Hang-up", NULL };
+static const char *cyc_dpage2[] = { "Door", "Options", NULL };
+static int dpage;
+static int door_keep = -1;                  /* the door selected across a Doors page rebuild */
+static BOOL panel_nocommit;                 /* close_panel: don't write the gadgets back this once */
 
 /* ---- panels ------------------------------------------------------------------ */
 
@@ -357,7 +438,7 @@ static struct Panel panels[NPANELS] = {
     { "IP rules",         PK_IP,     &ini_ip,    NULL,        "allow a.b.c.d/nn  or  deny 1.2.*  (allow = whitelist)" },
     { "Banned names",     PK_NAMES,  &ini_names, NULL,        "Nobody may sign up as these.  * = anything (*sysop*)" },
     { "Stripped ads",     PK_NAMES,  &ini_strip, NULL,        "Files taken out of uploaded LHA/LZH archives. #? = anything" },
-    { "Doors",            PK_LIST,   &ini_doors, f_doors,     "Macros: %f drop file  %n node  %u handle  %t minutes" },
+    { "Doors",            PK_LIST,   &ini_doors, f_doors,     "%u handle %t mins %n node %f drop file.  Detect reads the program, Check tests." },
     { "Message areas",    PK_LIST,   &ini_msg,   f_msgareas,  "Sub-ops moderate. Hold: posts below that level / first N wait." },
     { "File areas",       PK_LIST,   &ini_file,  f_fileareas, "Descriptions in files.bbs. Parent = sub-area of that tag; no path = a heading. CD/DVD drives have their own page." },
     { "CD/DVD drives",    PK_CD,     &ini_file,  f_cdareas,   "One area per drive (or folder on a disc).  Download only." },
@@ -496,6 +577,7 @@ static void field_get(struct Field *f, char *out, int size)
         else if (!strcmp(f->key, "nopage")) strcpy(out, (u->flags & UF_NOPAGE) ? "yes" : "no");
         else if (!strcmp(f->key, "lineedit")) strcpy(out, (u->flags & UF_LINEEDIT) ? "yes" : "no");
         else if (!strcmp(f->key, "termset")) strcpy(out, (u->flags & UF_TERMSET) ? "yes" : "no");
+        else if (!strcmp(f->key, "nomore")) strcpy(out, (u->flags & UF_NOMORE) ? "yes" : "no");
         else if (!strcmp(f->key, "calls")) sprintf(out, "%lu", u->calls);
         else if (!strcmp(f->key, "posts")) sprintf(out, "%lu", u->posts);
         else if (!strcmp(f->key, "uploads")) sprintf(out, "%lu", u->uploads);
@@ -520,6 +602,8 @@ static void field_get(struct Field *f, char *out, int size)
     if (IS_LIST(p->kind) && sel < 0) return;
     if (!ini_get(*p->ini, IS_LIST(p->kind) ? names[sel] : NULL, f->key, out, size))
         str_copy(out, f->def ? f->def : "", size);
+    else if (cur_panel == P_DOORS && !strcmp(f->key, "type"))
+        str_copy(out, dc_type_norm(out), size);         /* arexx / amiexpress: the names we show */
 }
 
 static void field_put(struct Field *f, const char *val)
@@ -528,6 +612,10 @@ static void field_put(struct Field *f, const char *val)
     char old[INI_LINELEN];
     field_get(f, old, sizeof(old));
     if (!strcmp(old, val)) return;                  /* unchanged: leave the file alone */
+    if (cur_panel == P_DOORS && f->key && !strcmp(f->key, "type") && sel >= 0) {
+        char raw[24];                               /* "arexx" in the file shows as cnetrexx: keep it */
+        if (ini_get(*p->ini, names[sel], "type", raw, sizeof(raw)) && !str_icmp(dc_type_norm(raw), val)) return;
+    }
 
     if (p->kind == PK_USERS) {
         struct UserRec *u;
@@ -564,6 +652,7 @@ static void field_put(struct Field *f, const char *val)
         else if (!strcmp(f->key, "nopage")) u->flags = (u->flags & ~UF_NOPAGE) | (val[0] == 'y' ? UF_NOPAGE : 0);
         else if (!strcmp(f->key, "lineedit")) u->flags = (u->flags & ~UF_LINEEDIT) | (val[0] == 'y' ? UF_LINEEDIT : 0);
         else if (!strcmp(f->key, "termset")) u->flags = (u->flags & ~UF_TERMSET) | (val[0] == 'y' ? UF_TERMSET : 0);
+        else if (!strcmp(f->key, "nomore")) u->flags = (u->flags & ~UF_NOMORE) | (val[0] == 'y' ? UF_NOMORE : 0);
         else if (!strcmp(f->key, "calls")) u->calls = strtoul(val, NULL, 10);
         else if (!strcmp(f->key, "posts")) u->posts = strtoul(val, NULL, 10);
         else if (!strcmp(f->key, "uploads")) u->uploads = strtoul(val, NULL, 10);
@@ -671,6 +760,13 @@ static void load_fields(struct Field *fields, struct Gadget **g, BOOL enabled)
 #define GID_DRIVES   24      /* CD/DVD: the drives found */
 #define GID_USEDRV   25      /* CD/DVD: point the selected area at the selected drive */
 #define GID_TESTDRV  26      /* CD/DVD: what's in the drive now */
+#define GID_MSCREEN  27      /* Menus: pick the screen file */
+#define GID_MMAKE    28      /* Menus: make the menu's ANSI screen from its items */
+#define GID_MNOSCR   29      /* Menus: no screen (drawn from the items) */
+#define GID_MSTATUS  30      /* Menus: add the Your account status item */
+#define GID_DPAGE    31      /* Doors: Door / Options / Hang-up */
+#define GID_DDETECT  32      /* Doors: look at the program, suggest the settings */
+#define GID_DCHECK   33      /* Doors: will these settings work here? */
 #define GID_FIELD    100     /* + index */
 #define GID_FIELD2   200
 
@@ -1064,7 +1160,9 @@ static void close_panel(void)
     struct Panel *p;
     if (cur_panel < 0) return;
     p = &panels[cur_panel];
-    if (p->kind == PK_MENU) {
+    if (panel_nocommit) {                   /* the gadgets still show another record (door_page after a pick) */
+        panel_nocommit = FALSE;
+    } else if (p->kind == PK_MENU) {
         commit_fields(f_menuhdr, fgad);
         commit_fields(f_menuitem, fgad2);
     } else if (p->kind == PK_IP || p->kind == PK_NAMES) {
@@ -1109,6 +1207,34 @@ static void refresh_panel_values(void)
     }
 }
 
+/* ---- Doors: the page for the selected door's type --------------------------------------- */
+
+static void door_sel_type(char *out, int size)
+{
+    str_copy(out, "cli", size);
+    if (sel >= 0 && ini_get(ini_doors, names[sel], "type", out, size)) str_copy(out, dc_type_norm(out), size);
+}
+
+static BOOL door_has_hup(const char *t)     /* hangup_* are read by cli and /X doors only */
+{
+    return !str_icmp(t, "cli") || !str_icmp(t, "xim");
+}
+
+static struct Field *door_fields(void)
+{
+    char t[24];
+    door_sel_type(t, sizeof(t));
+    if (dpage == 2 && !door_has_hup(t)) dpage = 1;
+    if (dpage == 0) return f_doors;
+    if (dpage == 2) return f_dhup;
+    if (!str_icmp(t, "cnetrexx") || !str_icmp(t, "aim")) return f_dopt_rexx;
+    if (!str_icmp(t, "cnetc")) return f_dopt_cnetc;
+    if (!str_icmp(t, "xim")) return f_dopt_xim;
+    if (!str_icmp(t, "rlogin")) return f_dopt_rlogin;
+    if (!str_icmp(t, "telnet") || !str_icmp(t, "tcp")) return f_dopt_net;
+    return f_dopt_cli;
+}
+
 static const char *cyc_policy[] = { "allow everyone else", "deny everyone else", NULL };
 
 static void open_panel(int n)
@@ -1121,6 +1247,11 @@ static void open_panel(int n)
     close_panel();
     cur_panel = n;
     sel = -1; sel2 = -1;
+    if (n == P_DOORS) {                     /* rebuilt for a door (door_page): its type picks the fields */
+        if (door_keep >= 0 && door_keep < nitems) sel = door_keep;
+        door_keep = -1;
+        p->fields = door_fields();
+    }
     g = CreateContext(&pglist);
     memset(&ng, 0, sizeof(ng));
     ng.ng_VisualInfo = vi;
@@ -1133,10 +1264,24 @@ static void open_panel(int n)
     case PK_LIST:
     case PK_USERS:
         if (p->kind == PK_USERS && !users) load_users();       /* kept while unsaved edits live */
-        lvh = (p->fields == f_doors) ? fh * 3 + 4 : fh * 6 + 4;
+        lvh = (n == P_DOORS) ? fh * 3 + 4 : fh * 6 + 4;
         g = make_listview(g, &g_list, px, y, pw, lvh, GID_LIST);
         y += lvh + 2;
         if (p->kind == PK_LIST) { g = make_buttons(g, px, y, GID_NEW, TRUE); y += rowh + 2; }
+        if (n == P_DOORS) {                 /* Show Door / Options / Hang-up, Detect, Check */
+            char t[24];
+            door_sel_type(t, sizeof(t));
+            ng.ng_LeftEdge = px + 48; ng.ng_TopEdge = y; ng.ng_Width = 120; ng.ng_Height = fh + 4;
+            ng.ng_GadgetText = (UBYTE *)"Show"; ng.ng_Flags = PLACETEXT_LEFT; ng.ng_GadgetID = GID_DPAGE;
+            g = CreateGadget(CYCLE_KIND, g, &ng, GTCY_Labels, (ULONG)(door_has_hup(t) ? cyc_dpage3 : cyc_dpage2),
+                             GTCY_Active, (ULONG)dpage, TAG_END);
+            ng.ng_Flags = 0; ng.ng_Width = 72;
+            ng.ng_LeftEdge = px + 180; ng.ng_GadgetText = (UBYTE *)"Detect"; ng.ng_GadgetID = GID_DDETECT;
+            g = CreateGadget(BUTTON_KIND, g, &ng, TAG_END);
+            ng.ng_LeftEdge = px + 256; ng.ng_GadgetText = (UBYTE *)"Check"; ng.ng_GadgetID = GID_DCHECK;
+            g = CreateGadget(BUTTON_KIND, g, &ng, TAG_END);
+            y += rowh + 2;
+        }
         if (p->kind == PK_USERS) {
             ng.ng_LeftEdge = px + 48; ng.ng_TopEdge = y; ng.ng_Width = 120; ng.ng_Height = fh + 4;
             ng.ng_GadgetText = (UBYTE *)"Show"; ng.ng_Flags = PLACETEXT_LEFT; ng.ng_GadgetID = GID_UPAGE;
@@ -1197,11 +1342,34 @@ static void open_panel(int n)
         }
         y += lvh + 2;
         g = make_buttons(g, px, y, GID_NEW, FALSE);
+        {   /* after New / Delete: the menu's ANSI screen */
+            static const char *lab[] = { "Screen...", "Make screen", "No screen" };
+            static const WORD wid[] = { 84, 100, 84 };
+            struct NewGadget bg;
+            WORD x = px + 2 * 68 + 8;
+            int i;
+            memset(&bg, 0, sizeof(bg));
+            bg.ng_VisualInfo = vi; bg.ng_TextAttr = tattr; bg.ng_TopEdge = y; bg.ng_Height = fh + 4;
+            for (i = 0; i < 3; i++) {
+                bg.ng_LeftEdge = x; bg.ng_Width = wid[i]; bg.ng_GadgetText = (UBYTE *)lab[i];
+                bg.ng_GadgetID = GID_MSCREEN + i;
+                g = CreateGadget(BUTTON_KIND, g, &bg, TAG_END);
+                x += wid[i] + 4;
+            }
+        }
         y += rowh + 2;
         lvh = fh * 4 + 4;                   /* the items (it scrolls) - room for the 7 header rows */
         g = make_listview(g, &g_list2, px, y, pw, lvh, GID_LIST2);
         y += lvh + 2;
         g = make_buttons(g, px, y, GID_NEW2, TRUE);
+        {   /* after the items' buttons: the account status item (new in 1.3) */
+            struct NewGadget bg;
+            memset(&bg, 0, sizeof(bg));
+            bg.ng_VisualInfo = vi; bg.ng_TextAttr = tattr; bg.ng_TopEdge = y; bg.ng_Height = fh + 4;
+            bg.ng_LeftEdge = px + 4 * 68 + 8; bg.ng_Width = 136;
+            bg.ng_GadgetText = (UBYTE *)"Add status item"; bg.ng_GadgetID = GID_MSTATUS;
+            g = CreateGadget(BUTTON_KIND, g, &bg, TAG_END);
+        }
         y += rowh + 2;
         g = make_fields(g, f_menuitem, fgad2, px, y, pw, GID_FIELD2, NULL);
         break;
@@ -1224,6 +1392,222 @@ static BOOL ask(const char *text, const char *buttons)
                              (UBYTE *)text, (UBYTE *)buttons };
     return EasyRequestArgs(win, &es, NULL, NULL) == 1;
 }
+/* ---- a menu's ANSI screen (the Menus page: Make screen / Screen... / No screen / Add status item) ----
+ * Make screen draws what BBSNode draws for the menu (menu.c menu_draw at 80 columns: the header banner,
+ * then the items in a box with the hot keys as coloured "pills") into BBS:Text/<menu>menu.ans and a
+ * plain .asc, and sets "screen = <menu>menu".  The sysop can then redraw it in any ANSI editor.
+ * Items a regular caller can't use (level above 10, or an ACS) stay off the picture; they still work.
+ * tools/mkscreens.py does the same on a PC. */
+
+#define MS_W 75                             /* inside the box at 80 columns (cols - 5) */
+static const UBYTE pc2ansi[8] = { 0, 4, 2, 6, 1, 5, 3, 7 };  /* pipe codes count in PC order (1 blue, 4 red) */
+
+static void ms_put(BPTR fh, const char *s) { FPuts(fh, (STRPTR)s); }
+
+static void ms_sgr(BPTR fh, BOOL ansi, int fg, int bg)
+{
+    char b[24];
+    if (!ansi) return;
+    sprintf(b, "\x1b[0;%s%d;%dm", fg >= 8 ? "1;" : "", 30 + pc2ansi[fg & 7], 40 + pc2ansi[bg & 7]);
+    ms_put(fh, b);
+}
+
+static void ms_rep(BPTR fh, const char *glyph, int n) { while (n-- > 0) ms_put(fh, glyph); }
+
+/* a key or the title in the accent colour: half blocks round it (ANSI), [K] / [ title ] (plain) */
+static void ms_tab(BPTR fh, BOOL ansi, int accent, const char *s, BOOL wide)
+{
+    if (ansi) {
+        ms_sgr(fh, TRUE, accent, 0); ms_put(fh, "\xDE");
+        ms_sgr(fh, TRUE, 15, accent);
+        if (wide) ms_put(fh, " ");
+        ms_put(fh, s);
+        if (wide) ms_put(fh, " ");
+        ms_sgr(fh, TRUE, accent, 0); ms_put(fh, "\xDD");
+    } else {
+        ms_put(fh, wide ? "[ " : "[");
+        ms_put(fh, s);
+        ms_put(fh, wide ? " ]" : "]");
+    }
+}
+
+/* the banner: Text/<name>.ans (or .asc) as it is, up to a DOS EOF / SAUCE; TRUE if there was one */
+static BOOL ms_banner(BPTR out, BOOL ansi, const char *name)
+{
+    static const char *ea[] = { ".ans", ".asc", ".txt", NULL }, *ep[] = { ".asc", ".txt", ".ans", NULL };
+    const char **e;
+    char path[PATHLEN];
+    UBYTE buf[512];
+    for (e = ansi ? ea : ep; *e; e++) {
+        BPTR in;
+        LONG n;
+        sprintf(path, "BBS:Text/%s%s", name, *e);
+        if (!(in = Open((STRPTR)path, MODE_OLDFILE))) continue;
+        while ((n = Read(in, buf, sizeof(buf))) > 0) {
+            UBYTE *eof = memchr(buf, 0x1A, n);
+            Write(out, buf, eof ? eof - buf : n);
+            if (eof) break;
+        }
+        Close(in);
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static BOOL ms_write(const char *path, BOOL ansi, const char *title, const char *header, int accent, int frame)
+{
+    const char *H = ansi ? "\xC4" : "-", *V = ansi ? "\xB3" : "|";
+    const char *nl = ansi ? "\r\n" : "\n";
+    int cw = MS_W / 2, dw = cw - 5, tlen, left, right, col = 0, i;
+    BOOL banner;
+    BPTR fh = Open((STRPTR)path, MODE_NEWFILE);
+    if (!fh) return FALSE;
+    ms_put(fh, nl);
+    banner = header[0] && ms_banner(fh, ansi, header);
+    if (banner) ms_put(fh, nl);
+    tlen = !banner && title[0] ? (int)strlen(title) + 4 : 0;
+    if (tlen > MS_W - 2) tlen = 0;
+    left = (MS_W + 1 - tlen) / 2;
+    right = MS_W + 1 - tlen - left;
+    ms_put(fh, " "); ms_sgr(fh, ansi, frame, 0);
+    ms_put(fh, ansi ? "\xDA" : "+"); ms_rep(fh, H, left);
+    if (tlen) { ms_tab(fh, ansi, accent, title, TRUE); ms_sgr(fh, ansi, frame, 0); }
+    ms_rep(fh, H, right); ms_put(fh, ansi ? "\xBF" : "+");
+    if (ansi) ms_put(fh, "\x1b[0m");
+    ms_put(fh, nl);
+    for (i = 0; i < ini_menu->n; i++) {
+        char key[8], lv[48], desc[64];
+        const char *p = ini_menu->line[i];
+        while (*p == ' ' || *p == '\t') p++;
+        if (str_nicmp(p, "item", 4)) continue;
+        menu_col(i, 0, key, sizeof(key));
+        menu_col(i, 1, lv, sizeof(lv));
+        menu_col(i, 4, desc, sizeof(desc));
+        if (!key[0] || !desc[0]) continue;
+        if (!(lv[0] >= '0' && lv[0] <= '9' && !strchr(lv, ' ') && atoi(lv) <= 10) && lv[0]) continue;  /* not everyone's */
+        key[1] = 0;
+        if (key[0] >= 'a' && key[0] <= 'z') key[0] -= 32;
+        if ((int)strlen(desc) > dw) desc[dw] = 0;
+        if (col == 0) { ms_put(fh, " "); ms_sgr(fh, ansi, frame, 0); ms_put(fh, V); ms_put(fh, " "); }
+        ms_tab(fh, ansi, accent, key, FALSE);
+        ms_put(fh, " "); ms_sgr(fh, ansi, 7, 0); ms_put(fh, desc);
+        ms_rep(fh, " ", cw - 4 - (int)strlen(desc));
+        if (++col >= 2) {
+            ms_rep(fh, " ", MS_W % 2); ms_sgr(fh, ansi, frame, 0); ms_put(fh, V);
+            if (ansi) ms_put(fh, "\x1b[0m");
+            ms_put(fh, nl);
+            col = 0;
+        }
+    }
+    if (col) {
+        ms_rep(fh, " ", cw * (2 - col) + MS_W % 2); ms_sgr(fh, ansi, frame, 0); ms_put(fh, V);
+        if (ansi) ms_put(fh, "\x1b[0m");
+        ms_put(fh, nl);
+    }
+    ms_put(fh, " "); ms_sgr(fh, ansi, frame, 0);
+    ms_put(fh, ansi ? "\xC0" : "+"); ms_rep(fh, H, MS_W + 1); ms_put(fh, ansi ? "\xD9" : "+");
+    if (ansi) ms_put(fh, "\x1b[0m");
+    ms_put(fh, nl);
+    Close(fh);
+    return TRUE;
+}
+
+static void menu_make_screen(void)
+{
+    char name[40], title[64], header[40], v[16], ans[PATHLEN], asc[PATHLEN], m[200];
+    int accent, frame;
+    if (!ini_menu || cur_menu < 0) { set_status("Pick a menu first."); return; }
+    commit_fields(f_menuhdr, fgad);
+    commit_fields(f_menuitem, fgad2);
+    sprintf(name, "%.30smenu", menunames[cur_menu]);
+    sprintf(ans, "BBS:Text/%s.ans", name);
+    sprintf(asc, "BBS:Text/%s.asc", name);
+    if (file_exists(ans) || file_exists(asc)) {
+        sprintf(m, "Replace %s.ans / .asc with the menu as it is now?\n(Your own drawing in them would be lost.)", name);
+        if (!ask(m, "Replace|Cancel")) return;
+    }
+    if (!ini_get(ini_menu, NULL, "title", title, sizeof(title))) title[0] = 0;
+    if (!ini_get(ini_menu, NULL, "header", header, sizeof(header))) header[0] = 0;
+    accent = ini_get(ini_menu, NULL, "accent", v, sizeof(v)) ? atoi(v) & 7 : 4;
+    frame = ini_get(ini_menu, NULL, "frame", v, sizeof(v)) ? atoi(v) & 15 : 8;
+    if (!ms_write(ans, TRUE, title, header, accent, frame) || !ms_write(asc, FALSE, title, header, accent, frame)) {
+        set_status("Could not write the screen into BBS:Text.");
+        return;
+    }
+    ini_set(ini_menu, NULL, "screen", name);
+    load_fields(f_menuhdr, fgad, TRUE);
+    sprintf(m, "Made Text/%s.ans + .asc and set Screen - Save, then redraw it in any ANSI editor.", name);
+    set_status(m);
+}
+
+static void menu_pick_screen(void)
+{
+    struct FileRequester *fr;
+    if (!ini_menu || cur_menu < 0) { set_status("Pick a menu first."); return; }
+    if (!AslBase) { set_status("No asl.library - type the screen's name in the Screen field."); return; }
+    commit_fields(f_menuhdr, fgad);
+    if (!(fr = AllocAslRequestTags(ASL_FileRequest, ASLFR_Window, (ULONG)win,
+            ASLFR_TitleText, (ULONG)"The menu's screen (in BBS:Text)", ASLFR_InitialDrawer, (ULONG)"BBS:Text",
+            ASLFR_InitialPattern, (ULONG)"#?.(ans|asc|txt)", ASLFR_DoPatterns, TRUE, ASLFR_SleepWindow, TRUE,
+            TAG_END))) return;
+    if (AslRequest(fr, NULL) && fr->fr_File[0]) {
+        char name[40], *dot;
+        BPTR a = Lock((STRPTR)fr->fr_Drawer, ACCESS_READ), b = Lock((STRPTR)"BBS:Text", ACCESS_READ);
+        BOOL same = a && b && SameLock(a, b) == LOCK_SAME;
+        if (a) UnLock(a);
+        if (b) UnLock(b);
+        str_copy(name, (char *)fr->fr_File, sizeof(name));
+        if ((dot = strrchr(name, '.'))) *dot = 0;
+        if (!same) set_status("A menu screen must be in BBS:Text - copy it there first.");
+        else {
+            ini_set(ini_menu, NULL, "screen", name);
+            load_fields(f_menuhdr, fgad, TRUE);
+            set_status("Screen set - Save to use it.");
+        }
+    }
+    FreeAslRequest(fr);
+}
+
+static void menu_no_screen(void)
+{
+    if (!ini_menu || cur_menu < 0) { set_status("Pick a menu first."); return; }
+    commit_fields(f_menuhdr, fgad);
+    ini_set(ini_menu, NULL, "screen", "");
+    load_fields(f_menuhdr, fgad, TRUE);
+    set_status("No screen: the menu is drawn from its items again (Save to keep it).");
+}
+
+/* the Your account status item (new in 1.3), on a free key - A if it can */
+static void menu_add_status(void)
+{
+    static const char keys[] = "AYZHNQJUVBCDEFGIKLMOPRSTWX";
+    char used[40] = "", cmd[20], key[4], line[80];
+    int i, last = -1;
+    const char *k;
+    if (!ini_menu || cur_menu < 0) { set_status("Pick a menu first (usually main)."); return; }
+    commit_fields(f_menuitem, fgad2);
+    for (i = 0; i < ini_menu->n; i++) {
+        const char *p = ini_menu->line[i];
+        while (*p == ' ' || *p == '\t') p++;
+        if (str_nicmp(p, "item", 4)) continue;
+        last = i;
+        menu_col(i, 2, cmd, sizeof(cmd));
+        if (!str_icmp(cmd, "status")) { set_status("This menu already has the account status item."); return; }
+        menu_col(i, 0, key, sizeof(key));
+        if (key[0] && strlen(used) < sizeof(used) - 1) {
+            char c = key[0] >= 'a' && key[0] <= 'z' ? key[0] - 32 : key[0];
+            used[strlen(used) + 1] = 0; used[strlen(used)] = c;
+        }
+    }
+    for (k = keys; *k && strchr(used, *k); k++) ;
+    if (!*k) { set_status("No free key left on this menu."); return; }
+    sprintf(line, "item = %c | 0 | status |  | Your account status", *k);
+    ini_insert_line(ini_menu, last >= 0 ? last + 1 : ini_menu->n, line);
+    fill_items2();
+    sprintf(line, "Added \"Your account status\" on key %c - Save to keep it.", *k);
+    set_status(line);
+}
+
 
 static BOOL any_dirty(void)
 {
@@ -1369,6 +1753,10 @@ static void list_action(int gid)
             int k = 1;
             do sprintf(tag, "NEW%d", k++); while (!ini_add_section(ini, tag) && k < 100);
             ini_set(ini, tag, "name", "New entry");
+            if (cur_panel == P_DOORS) {             /* a door that is complete enough to Detect/Check */
+                ini_set(ini, tag, "type", "cli");
+                ini_set(ini, tag, "level", "10");
+            }
             fill_items();
             for (sel = 0; sel < nitems && str_icmp(names[sel], tag); sel++) ;
             set_status("Added - give it a tag and fill in the fields.");
@@ -1408,7 +1796,11 @@ static void list_action(int gid)
     } else if (p->kind == PK_MENU) {
         commit_fields(f_menuhdr, fgad);
         commit_fields(f_menuitem, fgad2);
-        if (gid == GID_NEW) {
+        if (gid == GID_MSCREEN) menu_pick_screen();
+        else if (gid == GID_MMAKE) menu_make_screen();
+        else if (gid == GID_MNOSCR) menu_no_screen();
+        else if (gid == GID_MSTATUS) menu_add_status();
+        else if (gid == GID_NEW) {
             char path[64];
             int k = 1;
             BPTR fh;
@@ -1452,6 +1844,129 @@ static void list_action(int gid)
     }
     refresh_lists();
     refresh_panel_values();
+}
+
+/* ---- doors: pages, type defaults, Detect, Check ------------------------------------------- */
+
+/* a requester whose text may hold % (door commands do: %u %t) - it is an argument, not the format */
+static BOOL ask_text(const char *text, const char *buttons)
+{
+    struct EasyStruct es = { sizeof(struct EasyStruct), 0, (UBYTE *)"BBSConfig", (UBYTE *)"%s", (UBYTE *)buttons };
+    ULONG arg = (ULONG)text;
+    return EasyRequestArgs(win, &es, NULL, &arg) == 1;
+}
+
+/* rebuild the Doors panel on page pg for the selected door (its type picks the fields) */
+static void door_page(int pg)
+{
+    int keep = sel;
+    close_panel();                          /* commits the page being left */
+    dpage = pg;
+    door_keep = keep;
+    open_panel(P_DOORS);
+    refresh_lists();
+    refresh_panel_values();
+}
+
+/* the type just changed: what that kind of door needs, where we know it.  An Assign that is
+ * still the old type's default (set here a moment ago, cycling through types) follows the type. */
+static const char *type_assign(const char *t)
+{
+    if (!str_icmp(t, "cnetrexx") || !str_icmp(t, "cnetc")) return "PFILES: BBS:PFiles";   /* CNet: PFILES: */
+    if (!str_icmp(t, "aim") || !str_icmp(t, "xim")) return "DOORS: BBS:Doors";           /* AmiExpress: DOORS: */
+    return NULL;
+}
+
+static void door_type_defaults(const char *was, const char *t)
+{
+    char cmd[200], as[100], msg[160];
+    const char *want = type_assign(t), *had = type_assign(was);
+    if (sel < 0) return;
+    if (!ini_get(ini_doors, names[sel], "command", cmd, sizeof(cmd))) cmd[0] = 0;
+    if (!ini_get(ini_doors, names[sel], "assign", as, sizeof(as))) as[0] = 0;
+    msg[0] = 0;
+    if (!as[0] || (had && !str_icmp(as, had))) {        /* no assign, or only the old type's default */
+        if (want && (!cmd[0] || !str_nicmp(cmd, want, strchr(want, ':') - want + 1))) {
+            ini_set(ini_doors, names[sel], "assign", want);
+            sprintf(msg, "%s door: Assign set to %s (change it if the door lives elsewhere).", t, want);
+        } else if (as[0]) ini_set(ini_doors, names[sel], "assign", "");
+    }
+    if (!msg[0]) {
+        if (!str_icmp(t, "rlogin") || !str_icmp(t, "telnet") || !str_icmp(t, "tcp"))
+            sprintf(msg, "%s door: set Host (and Port) on the Options page.", t);
+        else
+            sprintf(msg, "%s door: Detect reads its program and fills in the rest.", t);
+    }
+    set_status(msg);
+}
+
+static void door_detect(void)
+{
+    struct DoorGuess g;
+    char cmd[256], dir[200], as[120], cur[24], old[8], drop[24], text[1500], line[200];
+    BOOL change = FALSE;
+    int k;
+
+    if (sel < 0) { set_status("Pick a door first."); return; }
+    commit_fields(panels[P_DOORS].fields, fgad);
+    if (!ini_get(ini_doors, names[sel], "command", cmd, sizeof(cmd))) cmd[0] = 0;
+    if (!ini_get(ini_doors, names[sel], "dir", dir, sizeof(dir))) dir[0] = 0;
+    if (!ini_get(ini_doors, names[sel], "assign", as, sizeof(as))) as[0] = 0;
+    door_sel_type(cur, sizeof(cur));
+    if (!cmd[0]) { set_status("Fill in Command (and Directory) first - Detect reads that program."); return; }
+    set_status("Reading the program...");
+    if (!dc_detect(cmd, dir, as, &g)) {
+        sprintf(text, "Can't find or read the program for\n  %.200s\n\nCheck Command, Directory and Assign.", cmd);
+        ask_text(text, "OK");
+        set_status("Detect: program not found.");
+        return;
+    }
+    sprintf(text, "%.200s\nlooks like %s:\n%s.\n", g.program, g.type, g.why);
+    strcat(text, "\nSettings:\n");
+    if (str_icmp(g.type, cur)) { sprintf(line, "  Type        %s -> %s\n", cur, g.type); strcat(text, line); change = TRUE; }
+    if (!ini_get(ini_doors, names[sel], "old_mci", old, sizeof(old))) strcpy(old, "no");
+    if (g.oldmci && old[0] != 'y') { strcat(text, "  Old MCI \\c1  yes (CNet 1.x/2.x screen codes)\n"); change = TRUE; }
+    if (g.assign[0] && !as[0]) { sprintf(line, "  Assign      %.100s\n", g.assign); strcat(text, line); change = TRUE; }
+    else if (g.assign[0] && str_icmp(g.assign, as)) { sprintf(line, "  (its paths suggest  %.100s)\n", g.assign); strcat(text, line); }
+    if (g.cnetver == 3) { strcat(text, "  CNet ver    3\n"); change = TRUE; }
+    if (g.dropfile[0] && (!ini_get(ini_doors, names[sel], "dropfile", drop, sizeof(drop)) || str_icmp(drop, g.dropfile))) {
+        sprintf(line, "  Drop file   %s\n", g.dropfile); strcat(text, line); change = TRUE;
+    }
+    if (!change) strcat(text, "  nothing to change\n");
+    if (g.nlibs) {
+        strcat(text, "\nIt uses:");
+        for (k = 0; k < g.nlibs; k++) { strcat(text, k ? ", " : " "); strcat(text, g.libs[k]); }
+        strcat(text, "\n");
+    }
+    if (!change) { ask_text(text, "OK"); set_status("Detect: the settings already match."); return; }
+    if (!ask_text(text, "Apply|Cancel")) { set_status("Detect: nothing changed."); return; }
+    ini_set(ini_doors, names[sel], "type", g.type);
+    if (g.oldmci) ini_set(ini_doors, names[sel], "old_mci", "yes");
+    if (g.assign[0] && !as[0]) ini_set(ini_doors, names[sel], "assign", g.assign);
+    if (g.cnetver == 3) ini_set(ini_doors, names[sel], "cnet_version", "3");
+    if (g.dropfile[0]) ini_set(ini_doors, names[sel], "dropfile", g.dropfile);
+    panel_nocommit = TRUE;                  /* committed at the start: the file is newer than the gadgets */
+    door_page(dpage);
+    set_status("Detect: applied - Check tests the result, Save writes Doors.cfg.");
+}
+
+static void door_check(void)
+{
+    char t[24], cmd[256], dir[200], as[120], host[80], rep[1400], text[1500];
+    int n;
+    if (sel < 0) { set_status("Pick a door first."); return; }
+    commit_fields(panels[P_DOORS].fields, fgad);
+    door_sel_type(t, sizeof(t));
+    if (!ini_get(ini_doors, names[sel], "command", cmd, sizeof(cmd))) cmd[0] = 0;
+    if (!ini_get(ini_doors, names[sel], "dir", dir, sizeof(dir))) dir[0] = 0;
+    if (!ini_get(ini_doors, names[sel], "assign", as, sizeof(as))) as[0] = 0;
+    if (!ini_get(ini_doors, names[sel], "host", host, sizeof(host))) host[0] = 0;
+    set_status("Checking...");
+    n = dc_check(t, cmd, dir, as, host, rep, sizeof(rep));
+    if (!rep[0]) { set_status("Check: nothing wrong found - try the door from a call."); return; }
+    sprintf(text, "%s %s:\n\n%s", names[sel], n ? "has problems" : "looks fine, with notes", rep);
+    ask_text(text, "OK");
+    set_status(n ? "Check: fix the problems listed, then Check again." : "Check: fine (see the notes).");
 }
 
 /* ---- users: page switch, validation ------------------------------------------------------- */
@@ -1539,6 +2054,7 @@ static int real_main(void)
 
     IntuitionBase = (struct IntuitionBase *)OpenLibrary((STRPTR)"intuition.library", 39);
     GadToolsBase = OpenLibrary((STRPTR)"gadtools.library", 39);
+    AslBase = OpenLibrary((STRPTR)"asl.library", 38);
     GfxBase = (struct GfxBase *)OpenLibrary((STRPTR)"graphics.library", 39);
     if (!IntuitionBase || !GadToolsBase || !GfxBase) {
         PutStr((STRPTR)"BBSConfig needs AmigaOS 3.0 or newer.\n");
@@ -1649,6 +2165,10 @@ static int real_main(void)
                         sel = code;
                         refresh_lists();
                         if (p->kind == PK_USERS) user_selected();
+                        if (cur_panel == P_DOORS) {     /* its type: its Options, its Show labels */
+                            panel_nocommit = TRUE;      /* the gadgets still hold the door left (committed above) */
+                            door_page(dpage);
+                        }
                     } else if (p->kind == PK_IP || p->kind == PK_NAMES) {
                         if (g_rule && sel >= 0) {
                             char *t = (char *)((struct StringInfo *)g_rule->SpecialInfo)->Buffer;
@@ -1691,6 +2211,12 @@ static int real_main(void)
                     cd_test();
                 } else if (id == GID_UPAGE) {
                     user_page(code);
+                } else if (id == GID_DPAGE) {
+                    door_page(code);
+                } else if (id == GID_DDETECT) {
+                    door_detect();
+                } else if (id == GID_DCHECK) {
+                    door_check();
                 } else if (id == GID_VALIDATE) {
                     validate_user();
                 } else if (id == GID_DEFAULT) {
@@ -1703,15 +2229,29 @@ static int real_main(void)
                     if (found >= 0) ini_replace_line(ini_ip, found, code ? "default deny" : "default allow");
                     else ini_insert_line(ini_ip, 0, code ? "default deny" : "default allow");
                     refresh_lists();
-                } else if (id >= GID_NEW && id <= GID_DOWN2) {
+                } else if ((id >= GID_NEW && id <= GID_DOWN2) || (id >= GID_MSCREEN && id <= GID_MSTATUS)) {
                     list_action(id);
                 } else if (id >= GID_FIELD) {
                     /* a field changed: apply it now so list labels follow */
+                    char before[24] = "", after[24];
+                    if (cur_panel == P_DOORS && p->fields == f_doors && id == GID_FIELD + DOOR_TYPE_FIELD)
+                        door_sel_type(before, sizeof(before));
                     if (p->kind == PK_MENU) {
                         if (id >= GID_FIELD2) commit_fields(f_menuitem, fgad2);
                         else commit_fields(f_menuhdr, fgad);
                     } else commit_fields(p->fields, fgad);
                     if (p->kind != PK_SIMPLE) refresh_lists();
+                    if (before[0]) {                /* a door's type changed: its defaults, its pages */
+                        door_sel_type(after, sizeof(after));
+                        if (str_icmp(before, after)) {
+                            char said[160];
+                            door_type_defaults(before, after);
+                            str_copy(said, status, sizeof(said));   /* the page rebuild shows its hint */
+                            panel_nocommit = TRUE;  /* committed above; the defaults are newer */
+                            door_page(0);
+                            set_status(said);
+                        }
+                    }
                 }
             }
         }
@@ -1730,6 +2270,7 @@ out:
     ini_free(ini_conf); ini_free(ini_bull); ini_free(ini_ev); ini_free(ini_names); ini_free(ini_strip);
     if (GfxBase) CloseLibrary((struct Library *)GfxBase);
     if (GadToolsBase) CloseLibrary(GadToolsBase);
+    if (AslBase) CloseLibrary(AslBase);
     if (IntuitionBase) CloseLibrary((struct Library *)IntuitionBase);
     return 0;
 }

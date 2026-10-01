@@ -470,6 +470,7 @@ void user_settings(void)
         tprintf(L("misc.user_settings.expert_mode", "  |08[|15X|08] |07Expert mode          |15%s\n"), (N.user.flags & UF_EXPERT) ? L("misc.user_settings.on", "on") : L("misc.user_settings.off", "off"));
         tprintf(L("misc.user_settings.accept_node_messages", "  |08[|15N|08] |07Accept node messages |15%s\n"), (N.user.flags & UF_NOPAGE) ? L("misc.user_settings.no", "no") : L("misc.user_settings.yes", "yes"));
         tprintf(L("misc.user_settings.transfer_protocol", "  |08[|15F|08] |07Transfer protocol    |15%s\n"), proto_name(N.user.proto));
+        tprintf(L("misc.user_settings.more_prompts", "  |08[|15M|08] |07More prompts         |15%s\n"), (N.user.flags & UF_NOMORE) ? L("misc.user_settings.off", "off") : L("misc.user_settings.on", "on"));
         tprintf(L("misc.user_settings.message_editor", "  |08[|15D|08] |07Message editor       |15%s\n"), (N.user.flags & UF_LINEEDIT) ? L("misc.user_settings.line", "line") : L("misc.user_settings.full_screen", "full-screen"));
         tprintf(L("misc.user_settings.location", "  |08[|15L|08] |07Location             |15%s\n"), N.user.location);
         tprintf(L("misc.user_settings.mail", "  |08[|15E|08] |07E-mail               |15%s\n"), N.user.email);
@@ -479,7 +480,7 @@ void user_settings(void)
         tputs(L("misc.user_settings.write_your_finger", "  |08[|15W|08] |07Write your finger plan\n"));
         tputs(L("misc.user_settings.auto_detect_terminal", "  |08[|15A|08] |07Auto-detect terminal again\n"));
         tputs(L("misc.user_settings.done_choice", "  |08[|15Q|08] |07Done\n\n|07Choice: "));
-        k = tgethot(nlang > 1 ? "TSXNFDLEPGWAQ\r" : "TSXNFDLEPWAQ\r");
+        k = tgethot(nlang > 1 ? "TSXNMFDLEPGWAQ\r" : "TSXNMFDLEPWAQ\r");
         if (k == KEY_HANGUP) return;
         tprintf("%c\n", (int)(k == '\r' ? 'Q' : k));
         switch (k) {
@@ -508,6 +509,7 @@ void user_settings(void)
             break;
         }
         case 'X': N.user.flags ^= UF_EXPERT; break;
+        case 'M': N.user.flags ^= UF_NOMORE; break;
         case 'G': {
             char pick[LANG_NAMELEN];
             if (lang_pick(pick)) {

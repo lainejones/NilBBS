@@ -25,6 +25,8 @@
  *      command run in its directory (LORD: "LCBDoor LORD.js MAINT") - except a
  *      door with its own schedule in Events.cfg ("BBSMaint DOOR=<tag>", as
  *      BBSSchedule's "Add door maintenance" makes), which runs only then.
+ *      "maint_rexx = <script>" runs a CNet game's ARexx maintenance with BBSMaint
+ *      as its CNet host (rexxmaint.c): Wall Street's Date, Empire's Emp.Maint.
  *
  * DOOR=<tag> on its own runs just that door's maint command and stops.
  * STRIPADS takes other boards' ads (Config/StripAds.cfg) out of every archive already in the file
@@ -434,6 +436,8 @@ static BOOL own_schedule(struct Cfg *ev, const char *tag)
 }
 
 /* every door's maint command (the nightly run), or just one door's (only = its tag) */
+LONG rexx_maint(const char *script);
+
 static void door_maint(const char *only)
 {
     struct Cfg *dc = cfg_load("BBS:Config/Doors.cfg");
@@ -441,23 +445,31 @@ static void door_maint(const char *only)
     LONG i, n = cfg_sections(dc), ran = 0;
     for (i = 0; i < n; i++) {
         const char *tag = cfg_section(dc, i), *cmd = cfg_sget(dc, tag, "maint", "");
+        const char *rx = cfg_sget(dc, tag, "maint_rexx", "");
         const char *dir = cfg_sget(dc, tag, "dir", "");
         BPTR lock = 0, old = 0, in, out;
         LONG rc;
         if (only && str_icmp(tag, only)) continue;
-        if (!cmd[0]) { if (only) say("Door %s has no maint command in Doors.cfg.", tag); continue; }
+        if (!cmd[0] && !rx[0]) { if (only) say("Door %s has no maint command in Doors.cfg.", tag); continue; }
         if (!only && own_schedule(ev, tag)) { say("Door %s: on its own schedule (Events.cfg) - not tonight.", tag); continue; }
-        say("Door %s: %s", tag, cmd);
         maint_assign(cfg_sget(dc, tag, "assign", ""));
         if (dir[0] && (lock = Lock((STRPTR)dir, ACCESS_READ))) old = CurrentDir(lock);
-        in = Open((STRPTR)"NIL:", MODE_OLDFILE);
-        if ((out = Open((STRPTR)MAINT_LOG, MODE_READWRITE))) Seek(out, 0, OFFSET_END);
-        else out = Open((STRPTR)"NIL:", MODE_NEWFILE);
-        rc = SystemTags((STRPTR)cmd, SYS_Input, in, SYS_Output, out, NP_StackSize, 65536, TAG_END);
-        Close(in);
-        Close(out);
+        if (cmd[0]) {
+            say("Door %s: %s", tag, cmd);
+            in = Open((STRPTR)"NIL:", MODE_OLDFILE);
+            if ((out = Open((STRPTR)MAINT_LOG, MODE_READWRITE))) Seek(out, 0, OFFSET_END);
+            else out = Open((STRPTR)"NIL:", MODE_NEWFILE);
+            rc = SystemTags((STRPTR)cmd, SYS_Input, in, SYS_Output, out, NP_StackSize, 65536, TAG_END);
+            Close(in);
+            Close(out);
+            say("  finished, rc %ld", rc);
+        }
+        if (rx[0]) {                    /* a CNet game's ARexx script: we're its host (rexxmaint.c) */
+            say("Door %s: ARexx %s", tag, rx);
+            rc = rexx_maint(rx);
+            say("  finished, rc %ld", rc);
+        }
         if (lock) { CurrentDir(old); UnLock(lock); }
-        say("  finished, rc %ld", rc);
         ran++;
     }
     cfg_free(dc);

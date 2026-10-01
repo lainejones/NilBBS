@@ -204,7 +204,10 @@ an `.lha` with an installer.  The ANSI terminal **[NilTerm](https://github.com/l
     It edits the config files in place
     and keeps their comments, then tells a running NilBBS to reload.
   - `BBSControl`: a Workbench (GadTools) console with the live node list,
-    kick, kick+ban, messaging, the ban list, reload and shutdown.
+    kick, kick+ban, messaging, the ban list, reload and shutdown - plus **The
+    wall** (every line with who really wrote it, even the anonymous ones;
+    delete one, trim, clear) and **Archives** (look inside an LhA or Zip and
+    take a file out of it; the archive keeps its date and protection bits).
   - `NilTerm`: an ANSI BBS terminal, and the sysop's terminal (BBSControl's
     **Logon** button): its own 640x400 16-colour screen (the VGA palette), the
     IBM VGA 8x16 CP437 font, a SyncTERM-style dialing directory (telnet, rlogin,
@@ -321,6 +324,13 @@ the `.mnu`'s items, so keep the two in step when you add or move an item. Items
 a regular caller can't use (the sysop menu `!`) aren't on the picture but still
 work for those who may. Take the `screen =` line out and NilBBS draws the menu
 from its items again, in a box under the `header =` banner.
+
+**In BBSConfig** (Menus page), per menu: **Make screen** draws
+`Text/<menu>menu.ans` + `.asc` from the menu as it is now (its banner and items,
+as NilBBS draws them) and sets its screen - run it again after changing the
+items; it asks before replacing your drawing. **Screen...** picks any screen in
+`BBS:Text`, **No screen** goes back to the generated menu, and **Add status
+item** puts "Your account status" on a free key (for boards updated from 1.2).
 
 **Starting over.** `tools/mkscreens.py` (on a PC, Python 3) writes these screens
 - the menus from each `.mnu` and its banner - into a `BBS:` drawer:

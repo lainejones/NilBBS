@@ -41,6 +41,7 @@ struct Library *SocketBase = NULL;
 
 static struct BBSShared *S;
 static struct Cfg *C;
+static void load_policy(void);
 static LONG  g_listen = -1;
 static BOOL  g_quiet = FALSE;
 static char  g_nodecmd[PATHLEN];
@@ -207,11 +208,24 @@ static void handle_connect(void)
         if (g_denymsg[0]) send_str(fd, g_denymsg);
         CloseSocket(fd);
         return;
-    case IPV_BANNED:
-        say("refused %s (banned)", ipstr);
-        if (g_banmsg[0]) send_str(fd, g_banmsg);
+    case IPV_BANNED: {
+        /* a time-out (failed logins, a flood) says when to come back; a ban for good
+         * gets ban_message */
+        ULONG left = 0;
+        struct IPBan *b;
+        shared_lock(S);
+        if ((b = ipf_findban(S, ip)) && b->expires > now) left = (b->expires - now + 59) / 60;
+        shared_unlock(S);
+        say("refused %s (%s)", ipstr, left ? "timed out" : "banned");
+        if (left) {
+            char msg[120];
+            sprintf(msg, "\r\nThis address is timed out - try again in %lu minute%s.\r\n",
+                    left, left == 1 ? "" : "s");
+            send_str(fd, msg);
+        } else if (g_banmsg[0]) send_str(fd, g_banmsg);
         CloseSocket(fd);
         return;
+    }
     case IPV_FLOOD:
         say("connect flood from %s - auto-banned", ipstr);
         if (g_banmsg[0]) send_str(fd, g_banmsg);
@@ -672,7 +686,12 @@ static LONG rexx_cmd(char *cmd, char *res)
         return 5;
     }
     if (!str_icmp(word, "RELOAD")) {
+        /* NilBBS.cfg too: the connect/login limits and messages (port and node count
+         * need a restart; nothing keeps a pointer into C between calls) */
+        struct Cfg *nc = cfg_load(bbs_config());
+        if (nc) { if (C) cfg_free(C); C = nc; }
         shared_lock(S);
+        load_policy();
         ipf_load_rules(S, BBS_IPRULES);
         shared_unlock(S);
         load_events();

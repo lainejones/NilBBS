@@ -118,7 +118,8 @@ static BOOL login_failed(void)
     banned = ipf_login_failed(N.S, N.ip, bbs_now());
     shared_unlock(N.S);
     if (banned) {
-        tputs(L("login.failed.too_many_failed", "\n|12Too many failed logins - this address is now blocked.|07\n"));
+        tprintf(L("login.failed.too_many_failed", "\n|12Too many failed logins - this address is now blocked for %d minutes.|07\n"),
+                (int)N.S->fail_ban_mins);
         tn_flush();
         bbs_log(BBS_SYSLOG, "node %d: %s auto-banned for failed logins", N.node, N.ipstr);
         node_hangup("failed logins");

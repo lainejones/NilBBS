@@ -355,6 +355,12 @@ static BOOL editor(struct Editor *ed, const char *quote, const char *qfrom, cons
 
 /* ---- post ---------------------------------------------------------------------------- */
 
+/* a door's text in NilBBS's own editor (CNet CALLEDITOR): 1 = saved, 0 = aborted */
+int msg_door_edit(struct Editor *ed, const char *subj)
+{
+    return editor(ed, NULL, NULL, "", subj ? subj : "") ? 1 : 0;
+}
+
 static ULONG store_post(int ai, struct MsgHdr *hp, const char *text, LONG len);
 
 static BOOL post_in(int ai, const char *to, const char *subj, ULONG replyto,

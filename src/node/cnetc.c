@@ -125,9 +125,8 @@ static void fill_user(struct UserData *u, const struct UserRec *r)
 }
 
 /* keep the fields doors poll in step with reality */
-static void update_z(struct CNetState *s)
+static void update_pd(struct PortData *z)
 {
-    struct PortData *z = s->z;
     LONG left = time_left_mins();
     to_isdate(bbs_now(), &z->Today);
     z->TimeLeft   = (short)(left < 0 ? 9990 : left * 10);
@@ -135,6 +134,77 @@ static void update_z(struct CNetState *s)
     z->Carrier    = N.online ? 1 : 0;
     z->OnLine     = N.online ? 1 : 0;
     if (!N.online) { z->Dumped = 1; z->getout = 1; z->TimeLeft = 0; }
+}
+static void update_z(struct CNetState *s) { update_pd(s->z); }
+
+/* the caller as a CNet door sees them */
+/* the pfile being run, for PortData's Select0 (CNet keeps its menu title and
+ * folder there; ARexx doors read them with GETUSER 1311960 / 1311992) */
+static char pf_title[32], pf_loc[96];
+static UBYTE pf_edbuff;
+void cnet_set_edbuff(UBYTE v) { pf_edbuff = v; }
+void cnet_set_pfile(const char *title, const char *loc)
+{
+    str_copy(pf_title, title, sizeof(pf_title));
+    str_copy(pf_loc, loc, sizeof(pf_loc));
+}
+
+static void fill_pd(struct PortData *z)
+{
+    str_copy(z->Select0.Title, pf_title, sizeof(z->Select0.Title));
+    str_copy(z->Select0.Location, pf_loc, sizeof(z->Select0.Location));
+    z->edbuff = pf_edbuff;                      /* CNet 4 doors read CALLEDITOR's answer here */
+    fill_user(&z->user1, &N.user);
+    z->id       = (short)N.user.id;
+    z->InPort   = (short)(N.node - 1);
+    z->CurrentCPS = 11520;
+    z->OnType   = 1;
+    z->ANSIon   = N.term != TT_ASCII;
+    z->ThisTask = FindTask(NULL);
+    z->MyMail   = 0;
+    z->WWidth   = N.cols;
+    z->WLength  = N.rows;
+    z->TermLength = N.rows;
+    z->loaded   = 1;
+    str_copy(z->Doing, "In a door", sizeof(z->Doing));
+    update_pd(z);
+}
+
+/*
+ * An ARexx door's 7-digit GETUSER: "STOOOOO" reads straight out of CNet's structures -
+ * S = the structure (1 PortData; 2 MainPort and 3 the PortData extension aren't built),
+ * T = the type (1 byte, 2 short, 3 text, 4 long), OOOOO = the byte offset.  E.g. 1200032
+ * is PortData.TimeOnLine (a short, tenths of a minute).  FALSE when we can't answer.
+ */
+/* the system-wide part (MainPort) - only what doors are seen to read */
+static void fill_mp(struct MainPort *m)
+{
+    m->gc.DefaultColor = 7;             /* Acey Deucey: GETUSER 2407202 -> \c<that> as its text colour */
+}
+
+BOOL cnet_getuser_raw(LONG spec, char *out, int max)
+{
+    /* SToooo: structure S (1 = PortData, 2 = MainPort), type T (1 byte 2 word 3 string 4 long),
+     * offset oooo - GETUSER 1311960 (the pfile's title), 2407202 (MainPort.gc.DefaultColor) */
+    APTR z;
+    LONG size;
+    int st = (int)(spec / 1000000), ty = (int)((spec / 100000) % 10);
+    LONG off = spec % 100000;
+    UBYTE *b;
+    out[0] = 0;
+    size = st == 1 ? (LONG)sizeof(struct PortData) : st == 2 ? (LONG)sizeof(struct MainPort) : 0;
+    if (!size || off < 0 || off >= size) return FALSE;
+    if (!(z = AllocVec(size, MEMF_PUBLIC | MEMF_CLEAR))) return FALSE;
+    if (st == 1) fill_pd((struct PortData *)z); else fill_mp((struct MainPort *)z);
+    b = (UBYTE *)z + off;
+    switch (ty) {
+    case 1: sprintf(out, "%d", (int)*(BYTE *)b); break;
+    case 2: if (off & 1) break; sprintf(out, "%d", (int)*(short *)b); break;
+    case 3: { int i; for (i = 0; i < max - 1 && off + i < size && b[i]; i++) out[i] = b[i]; out[i] = 0; } break;
+    case 4: if (off & 1) break; sprintf(out, "%ld", (long)*(LONG *)b); break;
+    }
+    FreeVec(z);
+    return out[0] != 0 || ty == 3;
 }
 
 static BOOL setup(struct CNetState *s, UBYTE ack)
@@ -161,22 +231,9 @@ static BOOL setup(struct CNetState *s, UBYTE ack)
     s->cp->zp  = s->z;
     s->cp->ack = ack;                   /* 40 = CNet 4, 30 = CNet 3; door writes 0 */
 
-    /* the caller as a CNet door sees them */
-    fill_user(&s->z->user1, &N.user);
-    s->z->id       = (short)N.user.id;
-    s->z->InPort   = (short)(N.node - 1);
-    s->z->CurrentCPS = 11520;
-    s->z->OnType   = 1;
-    s->z->ANSIon   = N.term != TT_ASCII;
-    s->z->ThisTask = FindTask(NULL);
-    s->z->cnp      = s->myp;
-    s->z->MyMail   = 0;
-    s->z->WWidth   = N.cols;
-    s->z->WLength  = N.rows;
-    s->z->TermLength = N.rows;
-    s->z->loaded   = 1;
-    str_copy(s->z->Doing, "In a door", sizeof(s->z->Doing));
-    update_z(s);
+    fill_pd(s->z);
+    fill_mp(s->myp);
+    s->z->cnp = s->myp;
     AddPort(mp);
     return TRUE;
 }
@@ -410,7 +467,17 @@ void run_cnetc(const char *tag, const char *cmd, const char *dir, LONG stack,
         cleanup(&s, FALSE);
         return;
     }
-    sprintf(line, "%s %s", cmd, s.portname);
+    {   /* CNet starts a C pfile as "<program> <port> [its own arguments]": the SDK's
+         * examples read the port from argv[1] and their options after it (Flut! wants
+         * "Flut <port> 2 2 2") */
+        const char *sp = cmd;
+        int plen;
+        if (*sp == '"') { sp = strchr(sp + 1, '"'); sp = sp ? sp + 1 : cmd + strlen(cmd); }
+        else while (*sp && *sp != ' ') sp++;
+        plen = sp - cmd;
+        while (*sp == ' ') sp++;
+        sprintf(line, "%.*s %s%s%s", plen, cmd, s.portname, *sp ? " " : "", sp);
+    }
     if (!(donesig = door_launch_sync(line, dir, stack))) {
         cleanup(&s, FALSE);
         tputs(L("cnetc.run_cnetc.the_door_could", "|12The door could not be started.|07\n"));

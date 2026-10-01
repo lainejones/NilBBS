@@ -52,7 +52,7 @@ node.logon.welcome_back = \n|07Welcome back, |15%s|07. This is call |15#%lu|07; 
 ; ----------------------------------------------------------------------------
 ; Login, new-user signup, logoff (login.c)
 ; ----------------------------------------------------------------------------
-login.failed.too_many_failed = \n|12Too many failed logins - this address is now blocked.|07\n
+login.failed.too_many_failed = \n|12Too many failed logins - this address is now blocked for %d minutes.|07\n
 login.trap_name.login_incorrect = \n|12Login incorrect.|07\n
 login.new_user.sorry_this_system = \n|12Sorry, this system is not accepting new users.|07\n
 login.new_user.new_user_password = "\n|07New user password: "
@@ -414,8 +414,9 @@ door.run.theres_no_door = |12There's no door called "%s".|07\n
 door.run.you_dont_have = |12You don't have access to that door.|07\n
 door.run.someone_else_is = |14Someone else is in that door right now - try again shortly.|07\n
 door.run.returning_to = \n|08Returning to |15|BN|08...|07\n
-door.list.doors = \n|09-=[ |15Doors|09 ]=-|07\n\n
 door.list.no_doors_are = "  |08No doors are installed.|07\n"
+door.list.doors = \n|09-=[ |15Doors|09 ]=-|07\n\n
+door.list.page_of = \n|08Page %ld of %ld - |15N|08ext, |15P|08revious
 door.list.door_number_enter = \n|07Door number |08(Enter to cancel)|07: |15
 
 ; ----------------------------------------------------------------------------
@@ -593,6 +594,7 @@ misc.user_settings.accept_node_messages = "  |08[|15N|08] |07Accept node message
 misc.user_settings.no = no
 misc.user_settings.yes = yes
 misc.user_settings.transfer_protocol = "  |08[|15F|08] |07Transfer protocol    |15%s\n"
+misc.user_settings.more_prompts = "  |08[|15M|08] |07More prompts         |15%s\n"
 misc.user_settings.message_editor = "  |08[|15D|08] |07Message editor       |15%s\n"
 misc.user_settings.line = line
 misc.user_settings.full_screen = full-screen

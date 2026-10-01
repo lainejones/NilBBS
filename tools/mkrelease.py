@@ -8,6 +8,7 @@ Run `make dist` first (the WSL build) so out/BBS holds fresh programs.  The pack
   NilBBS/ReadMe                  what's in it, how to install by hand
   NilBBS/WBStartup/BBSControl    a project icon the installer can drop in SYS:WBStartup
   NilBBS/BBS/                    the BBS drawer: programs + default config, NO users/logs/messages
+  NilBBS/Libs/AEDoor.library     NilBBS's own /X door library (src/aedoor), installed if LIBS: has none
   NilBBS/BBS/Doors/              the sample doors (one of each kind) - the door GAMES are separate
                                  packages: tools/mkdoors.py
 
@@ -129,6 +130,7 @@ def main():
     wbstartup_icon(os.path.join(OUT, 'BBS', 'BBSControl.info'), os.path.join(OUT, 'WBStartup'))
     copy(os.path.join(ROOT, 'install', 'Install_NilBBS'), os.path.join(OUT, 'Install_NilBBS'))
     copy(os.path.join(ROOT, 'install', 'ReadMe'), os.path.join(OUT, 'ReadMe'))
+    copy(os.path.join(ROOT, 'out', 'AEDoor.library'), os.path.join(OUT, 'Libs', 'AEDoor.library'))   # ours (src/aedoor)
     copy(os.path.join(ROOT, 'LICENSE'), os.path.join(OUT, 'LICENSE'))
     icon = os.path.join(OUT, 'Install_NilBBS.info')
     sys.path.insert(0, TOOLS)

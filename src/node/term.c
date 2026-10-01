@@ -40,7 +40,12 @@ const char *charset_name(UBYTE c)
 
 /* ---- paging -------------------------------------------------------------- */
 
-void tpage_start(void) { N.paging = TRUE; N.page_abort = FALSE; N.lines_out = 0; }
+void tpage_start(void)                  /* the caller can turn More pauses off (Your Settings) */
+{
+    N.paging = !(N.user.flags & UF_NOMORE);
+    N.page_abort = FALSE;
+    N.lines_out = 0;
+}
 void tpage_end(void)   { N.paging = FALSE; N.page_abort = FALSE; }
 
 static void more_prompt(void)

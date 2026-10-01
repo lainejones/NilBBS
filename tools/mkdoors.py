@@ -52,7 +52,7 @@ def game_realm(dst):
             copy(os.path.join(maps, f), os.path.join(dst, 'Maps', f))
     towns = os.path.join(R, 'Data', 'Towns')
     for f in os.listdir(towns):                              # names + street maps, not places.dat
-        if f.endswith('.map') or f == 'towns.dat':
+        if f.endswith('.map') or f in ('towns.dat', 'places.dat'):   # places.dat: where each town / mouth is (80x50 world)
             copy(os.path.join(towns, f), os.path.join(dst, 'Data', 'Towns', f))
     mkdirs(os.path.join(dst, 'Data'), ['Players', 'Inventory', 'Vault', 'Bank', 'Castles', 'Drops', 'Market',
                                        'Shops', 'PvP', 'Raids', 'Messages', 'Quests'])
@@ -106,8 +106,9 @@ DOORS = {
               'Other Places are ARexx add-ons (see IGM/ and Data/igm.cfg).'),
     'Realm': dict(title='Realm of the Overworld', tag='REALM', kind='rexx', main='REALM.rexx', build=game_realm,
         update_files=['#?.rexx', 'RealmEdit', 'RealmEdit.info'], update_dirs=['Data/Screens'], exe=['RealmEdit'],
+        update_world=['Maps/overworld.map', 'Data/Towns/places.dat'],
         maint='REALM_MAINT.rexx',
-        blurb='Fantasy RPG on a 60x40 overworld: explore, fight, trade, build castles and raid other players\' castles.'),
+        blurb='Fantasy RPG on an 80x50 overworld that reveals as you explore: fight, trade, build castles and raid other players\' castles.'),
     'SpaceBounty': dict(title='Space Bounty', tag='BOUNTY', kind='rexx', main='SpaceBounty.rexx', build=game_spacebounty,
         update_files=['#?.rexx'], update_dirs=['ansi'], exe=[], maint='SpaceBountyMaint.rexx',
         blurb='Trade between star ports, hunt pirates, found corporations and planets.'),
@@ -140,6 +141,26 @@ def installer(game, d):
             upd.append('        (copyfiles (source "%s") (dest pfdir) (choices "%s"))' % (game, f))
     for sub in d['update_dirs']:
         upd.append('        (copyfiles (source "%s/%s") (dest (tackon pfdir "%s")) (all))' % (game, sub, sub))
+    if d.get('update_world'):
+        # the world itself (Realm: 60x40 -> 80x50): only when the installed map isn't this one's size, and only
+        # if the sysop says so - a map edited with RealmEdit is theirs.  The old files are kept as .old.
+        first = d['update_world'][0]
+        upd.append('        (if (<> (getsize (tackon pfdir "%s")) (getsize "%s/%s"))' % (first, game, first))
+        upd.append('          (if (askbool (prompt "This version comes with a different world map.\\n\\n'
+                   'Replace your world map and town list with it? Players, castles and saves keep their places; '
+                   'your old map and town list are kept as .old files.")')
+        upd.append('                       (help "Choose Keep mine if you changed the map with RealmEdit and want to keep '
+                   'your changes. The new map has the same land where the old one was, with new ground and new '
+                   'towns added around it.")')
+        upd.append('                       (choices "Replace" "Keep mine") (default 0))')
+        upd.append('            (')
+        for w in d['update_world']:
+            wd, wf = os.path.split(w)
+            upd.append('              (if (exists (tackon pfdir "%s")) (copyfiles (source (tackon pfdir "%s")) (dest (tackon pfdir "%s")) '
+                       '(newname "%s.old") (nogauge)))' % (w, w, wd, wf))
+            upd.append('              (copyfiles (source "%s/%s") (dest (tackon pfdir "%s")) (choices "%s") (nogauge))'
+                       % (game, wd, wd, wf))
+        upd.append('            )))')
     exe = '\n'.join('(run (cat "Protect \\"" (tackon pfdir "%s") "\\" +e") (safe))' % e for e in d['exe'])
     maint_nuz = ('\\n\\nIts nightly maintenance (%s) is in the Doors.cfg entry - NilBBS runs it with the nightly '
                  'maintenance.' % d['maint']) if d.get('maint') else ''
@@ -294,6 +315,7 @@ def build(game):
     open(os.path.join(out, 'NilBBS-Doors.cfg'), 'w', newline='\n').write(doors_cfg(game, d))
     open(os.path.join(out, 'Install_' + game), 'w', newline='\n', encoding='latin-1').write(installer(game, d))
     open(os.path.join(out, 'ReadMe'), 'w', newline='\n', encoding='latin-1').write(readme(game, d))
+    copy(os.path.join(PROJ, d.get('repo', game), 'LICENSE'), os.path.join(out, 'LICENSE'))   # MIT, the game's own
     sys.path.insert(0, TOOLS)
     import iconlib, makeicon_install as mi
     data = iconlib.build_info(mi.build_cidx(), mi.PALETTE, mi.PLANAR_MAP, mi.W, mi.H, mi.TRANSPARENT,
