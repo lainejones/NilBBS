@@ -4,6 +4,9 @@ A native, multi-node **telnet BBS for AmigaOS 3.1+ (68020+)**, written in C.
 Callers telnet in over any `bsdsocket.library` stack (Roadshow, AmiTCP, Miami,
 a314bsd, WinUAE's bsdsocket emulation).
 
+**Door games** for NilBBS (and CNet) are in **[NilBBS-Doors](https://github.com/lainejones/NilBBS-Doors)**: seven games, each
+an `.lha` with an installer.  The ANSI terminal **[NilTerm](https://github.com/lainejones/NilTerm)** also comes on its own.
+
 ## Features
 
 - **Multi-node telnet.** One listener daemon, one `BBSNode` process per caller
