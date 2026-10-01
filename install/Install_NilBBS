@@ -140,7 +140,7 @@
   (
     ; an update: the programs and icons only
     (copyfiles (source "BBS") (dest bbsdir)
-               (choices "NilBBS" "BBSNode" "BBSCtl" "BBSControl" "BBSSchedule" "BBSConfig" "DoorCheck" "BBSToss" "BBSMaint" "NilTerm" "NilTerm.info"
+               (choices "NilBBS" "BBSNode" "BBSCtl" "BBSControl" "BBSSchedule" "BBSConfig" "DoorCheck" "BBSToss" "BBSMail" "BBSMaint" "NilTerm" "NilTerm.info"
                         "BBSControl.info" "BBSSchedule.info" "BBSConfig.info"
                         "Start NilBBS" "Start NilBBS.info" "Stop NilBBS" "Stop NilBBS.info"))
     ; a BBS installed before the rename (NuzBBS, 2026): its config, its boot lines, the old programs
@@ -195,6 +195,7 @@
 (set prog "BBSConfig") (P_EXEC)
 (set prog "DoorCheck") (P_EXEC)
 (set prog "BBSToss") (P_EXEC)
+(set prog "BBSMail") (P_EXEC)
 (set prog "BBSMaint") (P_EXEC)
 (set prog "NilTerm") (P_EXEC)
 (run (cat "Protect \"" (tackon bbsdir "Doors/Guess/Guess") "\" +e") (safe))

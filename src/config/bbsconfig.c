@@ -320,6 +320,10 @@ static struct Field f_fido[] = {
     { "Inbound",        "inbound",           F_STR,  W_FULL, "BBS:Fido/Inbound", NULL, 200 },
     { "Outbound",       "outbound",          F_STR,  W_FULL, "BBS:Fido/Outbound", NULL, 200 },
     { "Unpack cmd",     "unpack",            F_STR,  W_FULL, "", NULL, 200 },
+    /* BBSMail, the binkp mailer */
+    { "Binkp host",     "binkp_host",        F_STR,  W_FULL, "", NULL, 120 },
+    { "Binkp pwd",      "binkp_password",    F_STR,  W_HALF, "", NULL, 40 },
+    { "Domain",         "binkp_domain",      F_STR,  W_HALF, "fidonet", NULL, 30 },
     { NULL }
 };
 /* the generated menu's colours (menu.c): accent = the hot keys + title tab (0-7, the |16-|23
@@ -448,7 +452,7 @@ static struct Panel panels[NPANELS] = {
     { "Events",           PK_LIST,   &ini_ev,    f_events,    "Days: daily or Mon Tue ...  Exclusive logs everyone off." },
     { "Maintenance",      PK_SIMPLE, &ini_main,  f_maint,     "0 = no limit.  When it runs: the NIGHTLY event (Events)." },
     { "Community/QWK",   PK_SIMPLE, &ini_main,  f_community, "ACS: L20 FA Gstaff @name ... | = or.  Finger 0 = off." },
-    { "FidoNet",          PK_SIMPLE, &ini_fido,  f_fido,      "Addresses like 21:4/101.  Run BBSToss after mail." },
+    { "FidoNet",          PK_SIMPLE, &ini_fido,  f_fido,      "Addresses like 21:4/101.  BBSMail (Events [MAIL]) calls the binkp host." },
     { "Menus",            PK_MENU,   &ini_menu,  NULL,        "Commands: menu gosub return door doors msgread ..." },
     { "Users",            PK_USERS,  NULL,       f_user,      "Blank pass = keep.  NEW = awaiting validation." },
 };

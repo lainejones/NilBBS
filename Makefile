@@ -20,7 +20,7 @@ NODE    = src/node/node.c src/node/spy.c src/node/telnet.c src/node/charset.c sr
           src/node/serial.c
 HDRS    = VERSION src/common/bbs.h src/common/cfg.h src/common/msgbase.h src/common/dizcore.h src/common/lang.h src/node/node.h src/node/zmodem.h
 
-all: out/NilBBS out/BBSNode out/BBSCtl out/BBSControl out/BBSSchedule out/BBSConfig out/DoorCheck out/BBSToss out/BBSMaint out/Guess out/XIMTest out/XIMProbe out/AEDoor.library out/CNTest out/LCBDoor out/NilTerm
+all: out/NilBBS out/BBSNode out/BBSCtl out/BBSControl out/BBSSchedule out/BBSConfig out/DoorCheck out/BBSToss out/BBSMail out/BBSMaint out/Guess out/XIMTest out/XIMProbe out/AEDoor.library out/CNTest out/LCBDoor out/NilTerm
 
 out/NilBBS: src/daemon/nilbbs.c $(COMMON) $(HDRS)
 	@mkdir -p out
@@ -49,6 +49,10 @@ out/BBSConfig: src/config/bbsconfig.c src/config/ini.c src/config/ini.h src/conf
 out/DoorCheck: src/config/dccli.c src/config/doorcheck.c src/config/doorcheck.h src/config/ini.c src/config/ini.h $(COMMON) $(HDRS)
 	@mkdir -p out
 	$(CC) $(CFLAGS) -Isrc/config -o $@ src/config/dccli.c src/config/doorcheck.c src/config/ini.c $(COMMON) $(LIBS)
+
+# BBSMail: the binkp mailer (calls the uplink, sends BBSToss's outbound, receives into the inbound)
+out/BBSMail: src/fido/bbsmail.c src/common/util.c src/common/cfg.c src/common/shared.c $(HDRS)
+	$(CC) $(CFLAGS) -o $@ src/fido/bbsmail.c src/common/util.c src/common/cfg.c src/common/shared.c $(LIBS)
 
 out/BBSToss: src/fido/bbstoss.c $(COMMON) $(HDRS)
 	@mkdir -p out
@@ -100,7 +104,7 @@ dist: all
 	rm -rf out/BBS
 	cp -r dist/BBS out/BBS
 	cp dist/BBS.info out/
-	cp out/NilBBS out/BBSNode out/BBSCtl out/BBSControl out/BBSSchedule out/BBSConfig out/DoorCheck out/BBSToss out/BBSMaint out/NilTerm out/BBS/
+	cp out/NilBBS out/BBSNode out/BBSCtl out/BBSControl out/BBSSchedule out/BBSConfig out/DoorCheck out/BBSToss out/BBSMail out/BBSMaint out/NilTerm out/BBS/
 	mkdir -p out/BBS/Doors/Guess out/BBS/Doors/CNTest out/BBS/Doors/XIMTest
 	cp out/Guess out/BBS/Doors/Guess/
 	cp out/CNTest out/BBS/Doors/CNTest/

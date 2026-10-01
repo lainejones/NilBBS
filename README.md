@@ -102,7 +102,9 @@ an `.lha` with an installer.  The ANSI terminal **[NilTerm](https://github.com/l
   is configurable: LhA by default, or Zip for PC readers.
 - **FidoNet echomail.** `BBSToss` tosses Type 2+ packets (with dupe
   checking) and exports new posts with MSGID, origin, SEEN-BY and PATH to a
-  BinkleyTerm-style outbound. Pair it with a binkp mailer such as binkd.
+  BinkleyTerm-style outbound. `BBSMail` is the mailer: it calls the uplink
+  over binkp (CRAM-MD5 when the hub offers it), sends the outbound, takes
+  what the hub has for you and tosses it - one Events.cfg line.
 - **Files.**
   - Areas described by `files.bbs`, with new-file scan and wildcard search.
   - **ZMODEM** download and upload, with batches of up to 10 files, CRC-32,
@@ -251,6 +253,7 @@ The four scripts are run by IconX. The icons carry both a classic
 | `BBSControl` | Workbench sysop console (live nodes, bans) |
 | `NilTerm` | the sysop's ANSI terminal: its own 640x400 screen with the IBM VGA font, logs on to a node (`NilTerm [PORT=n] [HOST=name]`, BBSControl's Logon button, or double-click its icon - Tool Types `PORT=`, `HOST=`, `MODEID=`, `NATIVE`, `SMALL`) |
 | `BBSToss` | FidoNet toss/scan: `BBSToss [TOSS] [SCAN]` |
+| `BBSMail` | FidoNet binkp mailer: scan, call the uplink, toss: `BBSMail [NOTOSS] [VERBOSE]` (log: `Logs/BBSMail.log`) |
 | `BBSMaint` | nightly maintenance: `BBSMaint [NODOORS] [NOPACK]` (the NIGHTLY event runs it) |
 | `Doors/Guess/Guess` | sample door, and a template for writing your own |
 
