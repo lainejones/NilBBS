@@ -6,26 +6,34 @@
 
 FailAt 21
 Assign BBS: ""
-Protect BBS:NilBBS +e
-Protect BBS:BBSNode +e
-Protect BBS:BBSCtl +e
-Protect BBS:BBSControl +e
-Protect BBS:BBSToss +e
-Protect BBS:BBSConfig +e
-Protect BBS:BBSMaint +e
-Protect BBS:Doors/Guess/Guess +e
-Protect BBS:Doors/LORD/LCBDoor +e
-MakeDir >NIL: BBS:Fido BBS:Fido/Inbound BBS:Fido/Outbound BBS:Files/Amiga
+; the same programs Install_NilBBS protects (>NIL: - a program this version
+; doesn't have is skipped quietly)
+Protect >NIL: BBS:NilBBS +e
+Protect >NIL: BBS:BBSNode +e
+Protect >NIL: BBS:BBSCtl +e
+Protect >NIL: BBS:BBSControl +e
+Protect >NIL: BBS:BBSSchedule +e
+Protect >NIL: BBS:BBSConfig +e
+Protect >NIL: BBS:DoorCheck +e
+Protect >NIL: BBS:BBSToss +e
+Protect >NIL: BBS:BBSMaint +e
+Protect >NIL: BBS:NilTerm +e
+Protect >NIL: BBS:Doors/Guess/Guess +e
+Protect >NIL: BBS:Doors/CNTest/CNTest +e
+Protect >NIL: BBS:Doors/XIMTest/XIMTest +e
+MakeDir >NIL: BBS:Fido BBS:Fido/Inbound BBS:Fido/Outbound BBS:Files/Import BBS:PFiles
 
 Echo "NilBBS is in *"`CD`*"."
-Ask "Start NilBBS automatically at boot (adds 3 lines to S:User-Startup)? (y/N)"
+Ask "Start NilBBS automatically at boot (adds 4 lines to S:User-Startup)? (y/N)"
 If WARN
-  Search >NIL: S:User-Startup "NilBBS begin"
+  ; the installer's lines run BBS:NilBBS too - either kind counts.  The
+  ; markers are the installer's own, so a later Install_NilBBS finds them.
+  Search >NIL: S:User-Startup "BBS:NilBBS"
   If WARN
-    Echo ";NilBBS begin" >>S:User-Startup
+    Echo ";BEGIN NilBBS" >>S:User-Startup
     Echo "Assign BBS: *"`CD`*"" >>S:User-Startup
     Echo "Run >NIL: BBS:NilBBS QUIET" >>S:User-Startup
-    Echo ";NilBBS end" >>S:User-Startup
+    Echo ";END NilBBS" >>S:User-Startup
     Echo "Added to S:User-Startup."
   Else
     Echo "S:User-Startup already starts NilBBS - left alone."

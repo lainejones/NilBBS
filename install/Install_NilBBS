@@ -76,9 +76,9 @@
             (help "Any name up to 40 characters, for example \"The Dragon's Lair\". "
                   "You can change it later in BBSConfig.")
             (default "My NilBBS")))
-    (while (or (< (strlen bbsname) 1) (> (strlen bbsname) 40) (patmatch "#?\"#?" bbsname))
+    (while (or (< (strlen bbsname) 1) (> (strlen bbsname) 40) (patmatch "#?[\"*]#?" bbsname))
         (set bbsname
-            (askstring (prompt "The BBS name must be 1 to 40 characters and can't contain \".\n\nWhat is your BBS called?")
+            (askstring (prompt "The BBS name must be 1 to 40 characters and can't contain \" or *.\n\nWhat is your BBS called?")
                        (help "For example: The Dragon's Lair") (default "My NilBBS"))))
 
     (set sysop
@@ -90,10 +90,10 @@
                   "tries admin, root or administrator).")
             (default "")))
     (while (or (< (strlen sysop) 2) (> (strlen sysop) 31)
-               (patmatch "#?[\"|:/]#?" sysop)
+               (patmatch "#?[\"|:/*]#?" sysop)
                (patmatch "([Aa][Dd][Mm][Ii][Nn]|[Rr][Oo][Oo][Tt]|[Aa][Dd][Mm][Ii][Nn][Ii][Ss][Tt][Rr][Aa][Tt][Oo][Rr])" sysop))
         (set sysop
-            (askstring (prompt "The handle must be 2 to 31 characters, can't contain \" | : or /, "
+            (askstring (prompt "The handle must be 2 to 31 characters, can't contain \" | : / or *, "
                                "and can't be admin, root or administrator.\n\nYour sysop handle:")
                        (help "For example: Gandalf") (default ""))))
 
@@ -103,8 +103,8 @@
         (set pw1 (askstring (prompt "Password for " sysop "\n\n(at least 4 characters; you type it again next)")
                             (help "You log in with this password. Pick something bots can't guess.")
                             (default "")))
-        (while (or (< (strlen pw1) 4) (patmatch "#?\"#?" pw1))
-            (set pw1 (askstring (prompt "The password must be at least 4 characters and can't contain \".\n\nPassword for " sysop ":")
+        (while (or (< (strlen pw1) 4) (patmatch "#?[\"*]#?" pw1))
+            (set pw1 (askstring (prompt "The password must be at least 4 characters and can't contain \" or *.\n\nPassword for " sysop ":")
                                 (help "You log in with this password.") (default ""))))
         (set pw2 (askstring (prompt "Type the password for " sysop " again:")
                             (help "The two must match.") (default "")))
@@ -256,11 +256,10 @@
 (if (= is_update 0)
     (message "NilBBS is installed in\n" bbsdir "\n\n"
              "Your sysop handle is " sysop ", telnet port " port ".\n\n"
-             "To start it now: start your TCP/IP stack, then double-click \"Start NilBBS\" "
-             "in the BBS drawer. Telnet in and log in as " sysop ".\n\n"
-             "BBSConfig changes every setting; BBSControl is the live sysop console;\n"
-             "BBSSchedule sets up maintenance and other scheduled tasks.\n"
-             "Tip: put your own network on an \"allow\" line in Config/IPFilter.cfg.")
+             "To start it: start your TCP/IP stack, double-click \"Start NilBBS\" "
+             "in the BBS drawer, then telnet in as " sysop ".\n\n"
+             "BBSConfig changes settings, BBSControl is the sysop console. "
+             "Put your own network on an \"allow\" line in Config/IPFilter.cfg.")
     (message "NilBBS in " bbsdir " is updated.\n\n"
              "Restart it (Stop NilBBS, then Start NilBBS) to use the new programs.\n\n"
              "New in 1.3: \"Your account status\".\n"
