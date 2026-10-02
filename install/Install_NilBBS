@@ -271,10 +271,9 @@
              "Put your own network on an \"allow\" line in Config/IPFilter.cfg.")
     (message "NilBBS in " bbsdir " is updated.\n\n"
              "Restart it (Stop NilBBS, then Start NilBBS) to use the new programs.\n\n"
-             "New since 1.3: \"Your account status\" and menus as\n"
-             "ANSI screens.  Your menus are kept as they are -\n"
-             "in BBSConfig's Menus page, \"Add status item\" puts it\n"
-             "on a menu and \"Make screen\" turns a menu into an\n"
-             "ANSI screen you can redraw.  See the ReadMe."))
+             "New in 1.5: BBSMail, a FidoNet binkp mailer.\n"
+             "New in 1.5.1: BBSConfig's Serial/modem page, and the\n"
+             "CD-ROM browser tells swapped discs apart.\n"
+             "Your configuration is kept.  See the ReadMe."))
 (complete 100)
 (exit (quiet))

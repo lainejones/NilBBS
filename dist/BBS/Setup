@@ -17,6 +17,7 @@ Protect >NIL: BBS:BBSConfig +e
 Protect >NIL: BBS:DoorCheck +e
 Protect >NIL: BBS:BBSToss +e
 Protect >NIL: BBS:BBSMaint +e
+Protect >NIL: BBS:BBSMail +e
 Protect >NIL: BBS:NilTerm +e
 Protect >NIL: BBS:Doors/Guess/Guess +e
 Protect >NIL: BBS:Doors/CNTest/CNTest +e

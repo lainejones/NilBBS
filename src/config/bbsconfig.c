@@ -108,6 +108,19 @@ static struct Field f_security[] = {
     { "Busy message",   "busy_message",      F_STR,  W_FULL, "\\r\\nAll nodes are busy - please call back later.\\r\\n", NULL, 200 },
     { NULL }
 };
+/* Serial line / dial-up (src/node/serial.c): read by the daemon at start */
+static const char *cyc_carrier[] = { "auto", "yes", "no", NULL };
+static struct Field f_serial[] = {
+    { "Device",         "serial_device",     F_STR,  W_HALF, "", NULL, 40 },
+    { "Unit",           "serial_unit",       F_INT,  W_HALF, "0", NULL, 3 },
+    { "Baud",           "serial_baud",       F_INT,  W_HALF, "19200", NULL, 7 },
+    { "RTS/CTS",        "serial_rtscts",     F_BOOL, W_HALF, "yes", NULL, 0 },
+    { "Modem init",     "modem_init",        F_STR,  W_HALF, "", NULL, 60 },
+    { "Answer",         "modem_answer",      F_STR,  W_HALF, "ATA", NULL, 40 },
+    { "Carrier (CD)",   "serial_carrier",    F_CYC,  W_HALF, "auto", cyc_carrier, 0 },
+    { "Node (0=any)",   "serial_node",       F_INT,  W_HALF, "0", NULL, 3 },
+    { NULL }
+};
 /* Doors: three pages (Show: Door / Options / Hang-up), the Options page per door type -
  * only what that type uses (door.c door_get + where each option is read) */
 static struct Field f_doors[] = {           /* Door: every type */
@@ -422,7 +435,7 @@ static BOOL panel_nocommit;                 /* close_panel: don't write the gadg
 #define PK_CD     6     /* FileAreas.cfg, only the CD/DVD areas, + the drives on this Amiga */
 #define IS_LIST(k) ((k) == PK_LIST || (k) == PK_CD)
 
-enum { P_SYSTEM, P_NEWUSERS, P_SECURITY, P_IP, P_NAMES, P_STRIP, P_DOORS, P_MSG, P_FILE, P_CD, P_FILES, P_CONFS, P_BULL, P_EVENTS,
+enum { P_SYSTEM, P_NEWUSERS, P_SECURITY, P_SERIAL, P_IP, P_NAMES, P_STRIP, P_DOORS, P_MSG, P_FILE, P_CD, P_FILES, P_CONFS, P_BULL, P_EVENTS,
        P_MAINT, P_COMMUNITY, P_FIDO, P_MENUS, P_USERS, NPANELS };
 
 static struct Ini *ini_main, *ini_ip, *ini_doors, *ini_msg, *ini_file, *ini_fido, *ini_menu;
@@ -439,6 +452,7 @@ static struct Panel panels[NPANELS] = {
     { "System",           PK_SIMPLE, &ini_main,  f_system,    "Port and nodes take effect when NilBBS restarts." },
     { "New users", PK_SIMPLE, &ini_main,  f_newusers,  "Validated lvl 0 = no validation.  Min by level: level:minutes, 0 = unlimited." },
     { "Security",         PK_SIMPLE, &ini_main,  f_security,  "\\r\\n in messages = new line." },
+    { "Serial/modem",     PK_SIMPLE, &ini_main,  f_serial,    "Empty device = telnet only, empty init = direct line.  Used when NilBBS restarts." },
     { "IP rules",         PK_IP,     &ini_ip,    NULL,        "allow a.b.c.d/nn  or  deny 1.2.*  (allow = whitelist)" },
     { "Banned names",     PK_NAMES,  &ini_names, NULL,        "Nobody may sign up as these.  * = anything (*sysop*)" },
     { "Stripped ads",     PK_NAMES,  &ini_strip, NULL,        "Files taken out of uploaded LHA/LZH archives. #? = anything" },

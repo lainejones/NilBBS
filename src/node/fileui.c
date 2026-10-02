@@ -753,7 +753,7 @@ void file_download(void)
  * readme and downloads; a drawer opens, or goes down as one .lha packed in T:.  U goes
  * up (never above the area's path).  Swap the disc and the browser starts at the top of
  * the new one.  Descriptions are read only for the page on screen, and cached per disc
- * in BBS:Data/CD/<tag>/<disc name>.
+ * in BBS:Data/CD/<tag>/<disc name>_<fingerprint of its top drawer>.
  *   NilBBS.cfg: cd_pack_max_kb = 30720   ; the biggest drawer packed for a download
  */
 #define CD_MAX  500
@@ -761,16 +761,36 @@ void file_download(void)
 
 struct CdEnt { char name[108]; LONG size; ULONG date; UBYTE dir, readme; char desc[48]; UBYTE got; };
 
-static BOOL cd_disc(const char *path, char *vol, LONG max)
+/* the disc in the drive: its volume name (vol, to show) and who it is (id = name_<8 hex>, a hash of
+ * the names and sizes at the top of the area's path).  The name alone isn't enough: an emulator's
+ * folder-as-a-drive keeps the name its config gives it whatever disc is in, so a swap would look
+ * like the same disc. */
+static BOOL cd_disc(const char *path, char *vol, LONG max, char *id, LONG idmax)
 {
     char buf[PATHLEN], *c;
+    struct FileInfoBlock *fib;
+    ULONG h = 2166136261UL;                 /* FNV-1a */
     BPTR l = Lock((STRPTR)path, ACCESS_READ);
     if (!l) return FALSE;
     buf[0] = 0;
     NameFromLock(l, (STRPTR)buf, sizeof(buf));
+    if ((fib = AllocDosObject(DOS_FIB, NULL))) {
+        if (Examine(l, fib)) {
+            int k = 0;
+            while (k++ < 64 && ExNext(l, fib)) {        /* directory order: stable for a given disc */
+                const UBYTE *p;
+                LONG sz = fib->fib_DirEntryType > 0 ? -1 : fib->fib_Size;
+                int j;
+                for (p = (const UBYTE *)fib->fib_FileName; *p; p++) { h ^= *p; h *= 16777619UL; }
+                for (j = 0; j < 4; j++) { h ^= (UBYTE)(sz >> (8 * j)); h *= 16777619UL; }
+            }
+        }
+        FreeDosObject(DOS_FIB, fib);
+    }
     UnLock(l);
     if ((c = strchr(buf, ':'))) *c = 0;
     str_copy(vol, buf, max);
+    if (id) { buf[40] = 0; sprintf(buf + strlen(buf), "_%08lx", (unsigned long)h); str_copy(id, buf, idmax); }
     return TRUE;
 }
 
@@ -1020,7 +1040,7 @@ static void cd_drawer(struct FileArea *a, char *cur, struct CdEnt *e)
 
 static void cd_browse(struct FileArea *a)
 {
-    static char cur[PATHLEN], vol[64], seen_vol[64];
+    static char cur[PATHLEN], vol[64], did[64], seen_id[64];
     char sz[12];
     struct CdEnt *e;
     LONG n = -1, page = 0, i, k;
@@ -1029,17 +1049,17 @@ static void cd_browse(struct FileArea *a)
     if (!(e = AllocVec(CD_MAX * sizeof(struct CdEnt), MEMF_CLEAR))) return;
     set_activity("Browsing the CD-ROM");
     str_copy(cur, a->path, PATHLEN);
-    seen_vol[0] = 0;
+    seen_id[0] = 0;
     for (;;) {
-        if (!cd_disc(a->path, vol, sizeof(vol))) {
+        if (!cd_disc(a->path, vol, sizeof(vol), did, sizeof(did))) {
             tprintf(L("file.cd_browse.no_disc_in", "\n|09-=[ |15%s|09 ]=-|07\n\n  |08No disc in the drive.|07\n"), farea_title(idx));
             break;
         }
-        if (str_icmp(vol, seen_vol)) {                     /* a new disc (or the first look) */
-            if (seen_vol[0]) tprintf(L("file.cd_browse.the_disc_has", "\n|14The disc has changed: now |15%s|14.|07\n"), vol);
-            str_copy(seen_vol, vol, sizeof(seen_vol));
+        if (strcmp(did, seen_id)) {                        /* a new disc (or the first look) */
+            if (seen_id[0]) tprintf(L("file.cd_browse.the_disc_has", "\n|14The disc has changed: now |15%s|14.|07\n"), vol);
+            str_copy(seen_id, did, sizeof(seen_id));
             str_copy(cur, a->path, PATHLEN);
-            area_disc(a->path, a->tag, vol);
+            area_disc(a->path, a->tag, did);        /* its own cache, even when the name repeats */
             n = -1;
         }
         if (n < 0) {

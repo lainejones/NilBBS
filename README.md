@@ -18,7 +18,8 @@ an `.lha` with an installer.  The ANSI terminal **[NilTerm](https://github.com/l
   with `+++ ATH0` and DTR), a null-modem cable, or a WiFi modem in transparent mode.
   A call ends when the BBS ends it, the CD line drops, or the modem says `NO CARRIER`.
   NilBBS keeps one `BBSNode SERIAL` waiting on the line, and a call takes a free node
-  like any other. Set it up with the `serial_*` / `modem_*` keys in `NilBBS.cfg`.
+  like any other. Set it up on BBSConfig's Serial/modem page (or the `serial_*` /
+  `modem_*` keys in `NilBBS.cfg`); it takes effect when NilBBS restarts.
 - **Terminal autodetection.** The BBS sends an ANSI cursor-position request
   and sizes the screen with a second one. A one-glyph UTF-8 probe tells an
   8-bit terminal from a UTF-8 one.
@@ -200,9 +201,10 @@ an `.lha` with an installer.  The ANSI terminal **[NilTerm](https://github.com/l
     from a Shell. With callers online, packing is skipped.
 - **Sysop tools:**
   - `BBSConfig`: a Workbench configuration editor, like CNet's config.
-    Sections: System, New users, Security, IP rules, Doors, Message areas,
-    File areas, Files & DIZ, Conferences, Bulletins, Events, Community/QWK,
-    FidoNet, Menus and Users. Users covers access flags, group and credits.
+    Sections: System, New users, Security, Serial/modem, IP rules, Banned names,
+    Stripped ads, Doors, Message areas, File areas, CD/DVD drives, Files & DIZ,
+    Conferences, Bulletins, Events, Maintenance, Community/QWK, FidoNet, Menus
+    and Users. Users covers access flags, group and credits.
     It edits the config files in place
     and keeps their comments, then tells a running NilBBS to reload.
   - `BBSControl`: a Workbench (GadTools) console with the live node list,
@@ -226,13 +228,26 @@ an `.lha` with an installer.  The ANSI terminal **[NilTerm](https://github.com/l
 
 ## Install
 
-1. Copy the `BBS` drawer anywhere (e.g. `Work:BBS`).
-2. In a Shell: `CD Work:BBS` then `Execute Setup`. This assigns `BBS:`, sets
-   the protection bits, and can optionally add NilBBS to `S:User-Startup`.
-3. Edit `BBS:Config/NilBBS.cfg` and `BBS:Config/IPFilter.cfg`.
-4. With your TCP/IP stack up, run `Run >NIL: BBS:NilBBS` (or
-   `BBS:NilBBS PORT=2323`).
-5. Telnet in and type `NEW`. **The first account created becomes the sysop.**
+Needs AmigaOS 3.1 or newer, a 68020 or better and a TCP/IP stack (Roadshow,
+Miami, AmiTCP).
+
+1. Unpack `NilBBS-<version>.lha` (use the `.lha`: a `.zip` can't carry the
+   AmigaDOS protection bits, and the programs won't run until you
+   `Protect <program> +e` each one).
+2. Double-click **Install_NilBBS**. It asks where the `BBS` drawer goes, your
+   BBS name, sysop account and telnet port; it assigns `BBS:`, sets the
+   protection bits, puts `AEDoor.library` in LIBS: (for AmiExpress doors) and
+   can add NilBBS to `S:User-Startup`. Run it again over an existing BBS to
+   update the programs: configuration, users, messages and files are kept.
+3. With your TCP/IP stack up, double-click **Start NilBBS** in the `BBS` drawer.
+4. Telnet in and log on with the sysop account the installer made.
+
+By hand instead: copy the `BBS` drawer anywhere (e.g. `Work:BBS`); in a Shell
+`CD Work:BBS` then `Execute Setup` (assigns `BBS:`, sets the protection bits,
+can add NilBBS to `S:User-Startup`); copy `Libs/AEDoor.library` to LIBS: if
+you want AmiExpress doors; edit `BBS:Config/NilBBS.cfg` and
+`BBS:Config/IPFilter.cfg`; `Run >NIL: BBS:NilBBS`; telnet in and type `NEW` -
+**the first account created becomes the sysop.**
 
 From Workbench, the `BBS` drawer has icons for everything:
 - **Start NilBBS** and **Stop NilBBS**
@@ -251,11 +266,40 @@ The four scripts are run by IconX. The icons carry both a classic
 | `BBSCtl` | Shell sysop control |
 | `BBSConfig` | Workbench configuration editor (every setting, doors, areas, menus, users) |
 | `BBSControl` | Workbench sysop console (live nodes, bans) |
+| `BBSSchedule` | the event scheduler (started by NilBBS; runs `Events.cfg`) |
+| `DoorCheck` | checks a door's program and fills in its `Doors.cfg` settings (BBSConfig's Detect/Check use it) |
 | `NilTerm` | the sysop's ANSI terminal: its own 640x400 screen with the IBM VGA font, logs on to a node (`NilTerm [PORT=n] [HOST=name]`, BBSControl's Logon button, or double-click its icon - Tool Types `PORT=`, `HOST=`, `MODEID=`, `NATIVE`, `SMALL`) |
 | `BBSToss` | FidoNet toss/scan: `BBSToss [TOSS] [SCAN]` |
 | `BBSMail` | FidoNet binkp mailer: scan, call the uplink, toss: `BBSMail [NOTOSS] [VERBOSE]` (log: `Logs/BBSMail.log`) |
 | `BBSMaint` | nightly maintenance: `BBSMaint [NODOORS] [NOPACK]` (the NIGHTLY event runs it) |
-| `Doors/Guess/Guess` | sample door, and a template for writing your own |
+| `Doors/...` | four sample doors, one of each kind: Guess (CLI - a template for your own), Hello (CNet ARexx), CNTest (CNet C), XIMTest (AmiExpress XIM) |
+
+## CD-ROM file areas
+
+A file area can be a CD or DVD drive (or a folder on one): callers browse the
+disc as it is, drawers and all.
+
+```
+[CDROM]
+name     = CD-ROM Drive
+path     = CD0:
+download = 10
+upload   = 255
+cdrom    = yes        ; browse the disc (implies readonly = yes)
+```
+
+- `L` in the area shows the disc's name and its top drawer, fifteen entries a
+  page. A number picks an entry: a file shows its `.diz`/readme and downloads; a
+  drawer opens, or downloads as one `.lha` packed on the fly (up to
+  `cd_pack_max_kb` in `NilBBS.cfg`, default 30720). `U` goes back up.
+- Nothing is written to the disc: descriptions are read for the page on screen
+  and cached in `BBS:Data/CD/<tag>/`, per disc. A disc is known by its name and
+  a fingerprint of its top drawer, so swapping discs (even in an emulator that
+  keeps the drive's name) starts the browser on the new disc.
+- New-file scans, searches and `BBSMaint` skip CD areas.
+- BBSConfig's **CD/DVD drives** page sets them up: one area per drive.
+- `readonly = yes` alone (without `cdrom`) keeps the classic `files.bbs` listing
+  for a read-only directory, with its descriptions kept in `BBS:Data/CD/<tag>/`.
 
 ## Configuration files (`BBS:Config`)
 
@@ -391,7 +435,7 @@ make            # out/NilBBS out/BBSNode out/BBSCtl out/BBSControl out/BBSToss o
 make dist       # out/BBS - the ready-to-copy install drawer
 python tools/mkrelease.py    # out/release/NilBBS (installer package)
 python tools/mknilterm.py    # out/release/NilTerm (NilTerm's own package)
-python tools/mklha.py NilBBS 1.2    # pack a package into an .lha with LhA on the bench
+python tools/mklha.py NilBBS <version>    # pack a package into an .lha with LhA on the bench
 ```
 
 Each package drawer ships with its own icon beside it (`NilBBS.info`, `NilTerm.info`) inside the

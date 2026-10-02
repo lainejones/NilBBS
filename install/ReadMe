@@ -52,8 +52,12 @@ SCREENS - THE LOOK IS YOURS
   as an ANSI screen.
 
 WHAT'S IN THIS DRAWER
-  Install_NilBBS    the installer
+  Install_NilBBS    the installer (double-click it)
   BBS/              the BBS: programs and a default configuration
+  Libs/             AEDoor.library (NilBBS's own, for AmiExpress doors)
+  WBStartup/        BBSControl, if you want the sysop console at boot
+  LICENSE           MIT
+  Use the .lha: a .zip can't carry the AmigaDOS protection bits.
 
 DOORS
   BBS/Doors holds four sample doors - one of each kind NilBBS runs - already on
