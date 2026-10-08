@@ -20,7 +20,7 @@ Same personal-info check as the BBS release.
 import os, shutil, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from mkrelease import ROOT, TOOLS, copy, personal_check, package_icons
+from mkrelease import ROOT, copy, personal_check, package_icons, pkg_icon
 
 OUT = os.path.join(ROOT, 'out', 'release', 'NilTerm')
 SRC = os.path.join(ROOT, 'install', 'nilterm')
@@ -42,19 +42,11 @@ def main():
     copy(os.path.join(SRC, 'Install_NilTerm'), os.path.join(OUT, 'Install_NilTerm'))
     copy(os.path.join(SRC, 'NilTerm.readme'), os.path.join(OUT, 'NilTerm.readme'))
 
-    sys.path.insert(0, TOOLS)
-    import iconlib, makeicon_doc as doc, makeicon_drawer as drw, makeicon_install as mi
-    docicon = iconlib.build_info(doc.build_cidx(), doc.PALETTE, doc.PLANAR_MAP, doc.W, doc.H, doc.TRANSPARENT,
-                                 icon_type=4, default_tool=doc.DEFAULT_TOOL)
+    docicon = pkg_icon('doc')
     for f in ('NilTerm/NilTerm.guide', 'NilTerm/ReadMe', 'NilTerm/LICENSE', 'ReadMe'):
         open(os.path.join(OUT, f + '.info'), 'wb').write(docicon)
-    open(os.path.join(OUT, 'NilTerm.info'), 'wb').write(
-        iconlib.build_info(drw.build_cidx(), drw.PALETTE, drw.PLANAR_MAP, drw.W, drw.H, drw.TRANSPARENT, drawer=True))
-    open(os.path.join(OUT, 'Install_NilTerm.info'), 'wb').write(
-        iconlib.build_info(mi.build_cidx(), mi.PALETTE, mi.PLANAR_MAP, mi.W, mi.H, mi.TRANSPARENT,
-                           icon_type=4, default_tool='Installer',
-                           tool_types=['APPNAME=NilTerm', 'SCRIPT=Install_NilTerm', 'DEFUSER=AVERAGE',
-                                       'MINUSER=NOVICE', 'LOG=FALSE']))
+    open(os.path.join(OUT, 'NilTerm.info'), 'wb').write(pkg_icon('drawer'))
+    open(os.path.join(OUT, 'Install_NilTerm.info'), 'wb').write(pkg_icon('Install_NilTerm'))
     package_icons(OUT)
 
     bad = personal_check(OUT)

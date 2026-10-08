@@ -24,7 +24,7 @@ OUTROOT = os.path.join(ROOT, 'out', 'release', 'Doors')
 TOOLS = os.path.join(PROJ, 'tools')
 
 sys.path.insert(0, HERE)
-from mkrelease import copy, copytree, mkdirs, personal_check, package_icons     # shared helpers + the same check
+from mkrelease import copy, copytree, mkdirs, personal_check, package_icons, pkg_icon     # shared helpers + the same check
 
 # ---------------------------------------------------------------- what goes in each game drawer
 def c_game(repo, prog, datadirs, extra_dirs=('Art',)):
@@ -55,7 +55,7 @@ def game_realm(dst):
         if f.endswith('.map') or f in ('towns.dat', 'places.dat'):   # places.dat: where each town / mouth is (80x50 world)
             copy(os.path.join(towns, f), os.path.join(dst, 'Data', 'Towns', f))
     mkdirs(os.path.join(dst, 'Data'), ['Players', 'Inventory', 'Vault', 'Bank', 'Castles', 'Drops', 'Market',
-                                       'Shops', 'PvP', 'Raids', 'Messages', 'Quests'])
+                                       'Shops', 'PvP', 'Raids', 'Messages', 'Quests', 'Lottery'])
     mkdirs(dst, ['Logs'])
 
 def game_spacebounty(dst):
@@ -106,6 +106,7 @@ DOORS = {
               'Other Places are ARexx add-ons (see IGM/ and Data/igm.cfg).'),
     'Realm': dict(title='Realm of the Overworld', tag='REALM', kind='rexx', main='REALM.rexx', build=game_realm,
         update_files=['#?.rexx', 'RealmEdit', 'RealmEdit.info'], update_dirs=['Data/Screens'], exe=['RealmEdit'],
+        update_new=['ItemDB'],      # new item lists (legends, herbs) arrive; ones the sysop edited in RealmEdit stay
         update_world=['Maps/overworld.map', 'Data/Towns/places.dat'],
         maint='REALM_MAINT.rexx',
         blurb='Fantasy RPG on an 80x50 overworld that reveals as you explore: fight, trade, build castles and raid other players\' castles.'),
@@ -141,6 +142,12 @@ def installer(game, d):
             upd.append('        (copyfiles (source "%s") (dest pfdir) (choices "%s"))' % (game, f))
     for sub in d['update_dirs']:
         upd.append('        (copyfiles (source "%s/%s") (dest (tackon pfdir "%s")) (all))' % (game, sub, sub))
+    for sub in d.get('update_new', []):
+        # only files the install doesn't have yet: an update must not overwrite what the sysop edited
+        upd.append('        (if (not (exists (tackon pfdir "%s"))) (makedir (tackon pfdir "%s")))' % (sub, sub))
+        upd.append('        (foreach "%s/%s" "#?" (if (not (exists (tackon (tackon pfdir "%s") @each-name)))'
+                   ' (copyfiles (source (tackon "%s/%s" @each-name)) (dest (tackon pfdir "%s")) (nogauge))))'
+                   % (game, sub, sub, game, sub, sub))
     if d.get('update_world'):
         # the world itself (Realm: 60x40 -> 80x50): only when the installed map isn't this one's size, and only
         # if the sysop says so - a map edited with RealmEdit is theirs.  The old files are kept as .old.
@@ -316,13 +323,7 @@ def build(game):
     open(os.path.join(out, 'Install_' + game), 'w', newline='\n', encoding='latin-1').write(installer(game, d))
     open(os.path.join(out, 'ReadMe'), 'w', newline='\n', encoding='latin-1').write(readme(game, d))
     copy(os.path.join(PROJ, d.get('repo', game), 'LICENSE'), os.path.join(out, 'LICENSE'))   # MIT, the game's own
-    sys.path.insert(0, TOOLS)
-    import iconlib, makeicon_install as mi
-    data = iconlib.build_info(mi.build_cidx(), mi.PALETTE, mi.PLANAR_MAP, mi.W, mi.H, mi.TRANSPARENT,
-                              icon_type=4, default_tool='Installer',
-                              tool_types=['APPNAME=' + d['title'], 'SCRIPT=Install_' + game, 'DEFUSER=AVERAGE',
-                                          'MINUSER=AVERAGE', 'LOG=FALSE'])
-    open(os.path.join(out, 'Install_%s.info' % game), 'wb').write(data)
+    open(os.path.join(out, 'Install_%s.info' % game), 'wb').write(pkg_icon('Install_' + game))
     package_icons(out)
     bad = personal_check(out)
     if bad:
