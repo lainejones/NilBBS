@@ -117,3 +117,7 @@ INSTALLING BY HAND
   To have BBSControl open every time Workbench starts, copy WBStartup/BBSControl
   and its icon into SYS:WBStartup and set the icon's Default Tool to your
   BBS/BBSControl (Workbench's Icon > Information).
+
+CREDITS
+  Bryan Ashby (NuSkooler): AEDoor.library keeps d1/a0/a1 across every call,
+  as AEDoor 2.x does, so assembler /X doors such as The Quest run (GitHub PR #1).
