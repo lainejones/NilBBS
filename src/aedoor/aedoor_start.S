@@ -7,6 +7,12 @@
 | Prompt / GetStr set Z on a NULL (lost carrier), HotKey sets N on -1.
 | (A plain "tst.l d0" after the call does both.)
 |
+| Every stub also saves d1/a0/a1 around the C call, which may change d0-d1
+| and a0-a1, so a call changes nothing but d0 and the flags.  AEDoor 2.x
+| keeps a1, the DIFace, across its calls, and assembler doors count on it:
+| The Quest keeps its DIFace in a1 from one call to the next.  The movem
+| that restores them leaves the flags from "tst.l d0" alone.
+|
 | No RTF_AUTOINIT: rt_Init is our own Init, which calls MakeLibrary and
 | AddLibrary itself (as a314bsd's bsdsocket.library does).
 
@@ -169,19 +175,24 @@ Null:
 |   ...  (flags: 1 = string given, 2 = data given)
 
 LCreateComm:                    | d0 = node (ASCII, obsolete)
+    movem.l d1/a0-a1,-(sp)
     move.l  d0,-(sp)
     jsr     _aed_CreateComm
     addq.l  #4,sp
     tst.l   d0
+    movem.l (sp)+,d1/a0-a1
     rts
 
 LDeleteComm:                    | a1 = dif
+    movem.l d1/a0-a1,-(sp)
     move.l  a1,-(sp)
     jsr     _aed_DeleteComm
     addq.l  #4,sp
+    movem.l (sp)+,d1/a0-a1
     rts
 
 LSendCmd:                       | a1 = dif, d0 = cmd
+    movem.l d1/a0-a1,-(sp)
     pea     0.w                 | flags: neither string nor data
     clr.l   -(sp)
     clr.l   -(sp)
@@ -189,9 +200,11 @@ LSendCmd:                       | a1 = dif, d0 = cmd
     move.l  a1,-(sp)
     jsr     _aed_Send
     lea     20(sp),sp
+    movem.l (sp)+,d1/a0-a1
     rts
 
 LSendStrCmd:                    | a1 = dif, d0 = cmd, a0 = string
+    movem.l d1/a0-a1,-(sp)
     pea     1.w
     clr.l   -(sp)
     move.l  a0,-(sp)
@@ -199,9 +212,11 @@ LSendStrCmd:                    | a1 = dif, d0 = cmd, a0 = string
     move.l  a1,-(sp)
     jsr     _aed_Send
     lea     20(sp),sp
+    movem.l (sp)+,d1/a0-a1
     rts
 
 LSendDataCmd:                   | a1 = dif, d0 = cmd, d1 = data
+    movem.l d1/a0-a1,-(sp)
     pea     2.w
     move.l  d1,-(sp)
     clr.l   -(sp)
@@ -209,9 +224,11 @@ LSendDataCmd:                   | a1 = dif, d0 = cmd, d1 = data
     move.l  a1,-(sp)
     jsr     _aed_Send
     lea     20(sp),sp
+    movem.l (sp)+,d1/a0-a1
     rts
 
 LSendStrDataCmd:                | a1 = dif, d0 = cmd, a0 = string, d1 = data
+    movem.l d1/a0-a1,-(sp)
     pea     3.w
     move.l  d1,-(sp)
     move.l  a0,-(sp)
@@ -219,89 +236,112 @@ LSendStrDataCmd:                | a1 = dif, d0 = cmd, a0 = string, d1 = data
     move.l  a1,-(sp)
     jsr     _aed_Send
     lea     20(sp),sp
+    movem.l (sp)+,d1/a0-a1
     rts
 
 LGetData:                       | a1 = dif -> d0 = &Data
+    movem.l d1/a0-a1,-(sp)
     move.l  a1,-(sp)
     jsr     _aed_GetData
     addq.l  #4,sp
+    movem.l (sp)+,d1/a0-a1
     rts
 
 LGetString:                     | a1 = dif -> d0 = String
+    movem.l d1/a0-a1,-(sp)
     move.l  a1,-(sp)
     jsr     _aed_GetString
     addq.l  #4,sp
+    movem.l (sp)+,d1/a0-a1
     rts
 
 LPrompt:                        | a1 = dif, d1 = length, a0 = prompt -> String / NULL (Z)
+    movem.l d1/a0-a1,-(sp)
     move.l  a0,-(sp)
     move.l  d1,-(sp)
     move.l  a1,-(sp)
     jsr     _aed_Prompt
     lea     12(sp),sp
     tst.l   d0
+    movem.l (sp)+,d1/a0-a1
     rts
 
 LWriteStr:                      | a1 = dif, a0 = string, d1 = flags
+    movem.l d1/a0-a1,-(sp)
     move.l  d1,-(sp)
     move.l  a0,-(sp)
     move.l  a1,-(sp)
     jsr     _aed_WriteStr
     lea     12(sp),sp
+    movem.l (sp)+,d1/a0-a1
     rts
 
 LShowGFile:                     | a1 = dif, a0 = file
+    movem.l d1/a0-a1,-(sp)
     move.l  a0,-(sp)
     move.l  a1,-(sp)
     jsr     _aed_ShowGFile
     addq.l  #8,sp
+    movem.l (sp)+,d1/a0-a1
     rts
 
 LShowFile:                      | a1 = dif, a0 = file
+    movem.l d1/a0-a1,-(sp)
     move.l  a0,-(sp)
     move.l  a1,-(sp)
     jsr     _aed_ShowFile
     addq.l  #8,sp
+    movem.l (sp)+,d1/a0-a1
     rts
 
 LSetDT:                         | a1 = dif, d0 = id, a0 = str
+    movem.l d1/a0-a1,-(sp)
     move.l  a0,-(sp)
     move.l  d0,-(sp)
     move.l  a1,-(sp)
     jsr     _aed_SetDT
     lea     12(sp),sp
+    movem.l (sp)+,d1/a0-a1
     rts
 
 LGetDT:                         | a1 = dif, d0 = id, a0 = str (or NULL)
+    movem.l d1/a0-a1,-(sp)
     move.l  a0,-(sp)
     move.l  d0,-(sp)
     move.l  a1,-(sp)
     jsr     _aed_GetDT
     lea     12(sp),sp
+    movem.l (sp)+,d1/a0-a1
     rts
 
 LGetStr:                        | a1 = dif, d1 = length, a0 = default -> String / NULL (Z)
+    movem.l d1/a0-a1,-(sp)
     move.l  a0,-(sp)
     move.l  d1,-(sp)
     move.l  a1,-(sp)
     jsr     _aed_GetStr
     lea     12(sp),sp
     tst.l   d0
+    movem.l (sp)+,d1/a0-a1
     rts
 
 LCopyStr:                       | a1 = dif, a0 = buffer
+    movem.l d1/a0-a1,-(sp)
     move.l  a0,-(sp)
     move.l  a1,-(sp)
     jsr     _aed_CopyStr
     addq.l  #8,sp
+    movem.l (sp)+,d1/a0-a1
     rts
 
 LHotKey:                        | a1 = dif, a0 = prompt (or NULL) -> key / -1 (N)
+    movem.l d1/a0-a1,-(sp)
     move.l  a0,-(sp)
     move.l  a1,-(sp)
     jsr     _aed_HotKey
     addq.l  #8,sp
     tst.l   d0
+    movem.l (sp)+,d1/a0-a1
     rts
 
 LPreCreateComm:                 | private multi-door calls: nothing to do here
