@@ -452,7 +452,7 @@ against lrzsz, rlogin, FidoNet packets) aren't in the public repo.
 
 ## Credits
 
-- **Bryan Ashby (NuSkooler)** - AEDoor.library now keeps `d1`/`a0`/`a1` across every call, as
+- **NuSkooler** - AEDoor.library now keeps `d1`/`a0`/`a1` across every call, as
   AEDoor 2.x does, so hand-written assembler /X doors that keep their DIFace in `a1` (The Quest)
   run instead of crashing ([PR #1](https://github.com/lainejones/NilBBS/pull/1)). Found while running
   /X doors under vAmiga, with a disassembly of AEDoor 2.2 to show why.

@@ -119,5 +119,5 @@ INSTALLING BY HAND
   BBS/BBSControl (Workbench's Icon > Information).
 
 CREDITS
-  Bryan Ashby (NuSkooler): AEDoor.library keeps d1/a0/a1 across every call,
+  NuSkooler: AEDoor.library keeps d1/a0/a1 across every call,
   as AEDoor 2.x does, so assembler /X doors such as The Quest run (GitHub PR #1).
